@@ -1,4 +1,4 @@
----
+Ptn de fichier---
 title: "DiD tests"
 format: html
 ---
@@ -246,7 +246,7 @@ ggplot(data = cmat, mapping = aes(y = coefs, x = exposure)) +
   theme_bw()
 ```
 
-**Problème:** pour l'instant je n'arrive pas à simuler un dataframe où l'hypothèse de parallel trend est vérifiée... Notamment, je ne comprends pas le pramètre \$te.e qui génère une soit-disant dynamique.
+**Probl?me:** pour l'instant je n'arrive pas ? simuler un dataframe o? l'hypoth?se de parallel trend est v?rifi?e... Notamment, je ne comprends pas le pram?tre \$te.e qui g?n?re une soit-disant dynamique.
 
 -   **DiD package approach**:
 
