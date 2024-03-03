@@ -7,7 +7,7 @@ format: html
 ```{r}
 #install.packages("devtools")
 #devtools::install_github("bcallaway11/did", force=TRUE)
-#library(did)
+library(did)
 library(plm)
 library(ggplot2)
 ```
@@ -175,6 +175,32 @@ data <- build_sim_dataset(sim_parameters)
 head(data)
 ```
 
+```{r}
+# Charger le package dplyr pour utiliser la fonction copy (si vous souhaitez l'utiliser)
+library(dplyr)
+
+# Étape 1 : Copier le dataset
+copie_dataset <- data.frame(data)
+# OU avec dplyr
+# copie_dataset <- copy(original_dataset)
+
+# Étape 2 : Mettre à zéro les colonnes choisies
+copie_dataset$cluster <- 0
+copie_dataset$X <- 0
+
+# Afficher le dataset modifié pour vérification
+print(copie_dataset)
+
+```
+
+
+
+
+
+
+
+
+
 The function simulates a data set with the following attributes:
 
 -   **G**: observations group
@@ -216,6 +242,31 @@ row.names(data) <- NULL
 head(data)
 ```
 #L'objectif de ce code est d'évaluer comment la variable dépendante Y varie par rapport aux différentes périodes temporelles. On normalise à 0 pour mesurer l'impact relatif. 
+
+```{r}
+#-----------------------------------------------------------------------------
+# modify the dataset a bit so that we can run an event study
+#-----------------------------------------------------------------------------
+
+# generate leads and lags of the treatment
+Dtl_copie <- sapply(-(time.periods-1):(time.periods-2), function(l) {
+    dtl_copie <- 1*( (copie_dataset$period == copie_dataset$G + l) & (copie_dataset$G > 0) )
+    dtl_copie
+})
+Dtl_copie <- as.data.frame(Dtl_copie)
+cnames1 <- paste0("Dtmin", (time.periods-1):1)
+colnames(Dtl_copie) <- c(cnames1, paste0("Dt", 0:(time.periods-2)))
+copie_dataset <- cbind.data.frame(copie_dataset, Dtl_copie)
+row.names(copie_dataset) <- NULL
+
+head(copie_dataset)
+```
+
+
+
+
+
+
 ```{r}
 #-----------------------------------------------------------------------------
 # run the event study regression
@@ -229,6 +280,25 @@ es <- plm(Y ~ Dtmin3 + Dtmin2 + Dt0 + Dt1 + Dt2,
 
 summary(es)
 ```
+
+```{r}
+#-----------------------------------------------------------------------------
+# run the event study regression
+#-----------------------------------------------------------------------------
+
+# run event study regression
+# normalize effect to be 0 in pre-treatment period
+es_copie <- plm(Y ~ Dtmin3 + Dtmin2 + Dt0 + Dt1 + Dt2, 
+          data = copie_dataset, model = "within", effect = "twoways",
+          index = c("id", "period"))
+
+summary(es_copie)
+```
+
+
+
+
+
 #Le code ci-dessous produit un graphique qui permet de visualiser l'évolution de l'effet de chaque période sur la variable. 
 ```{r}
 #-----------------------------------------------------------------------------
