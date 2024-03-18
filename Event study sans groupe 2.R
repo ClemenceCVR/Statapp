@@ -5,7 +5,7 @@ library(broom) # for tidy function
 library(plm)
 
 # Set seed for reproducibility
-set.seed(1234)
+set.seed(113)
 
 # Number of individuals per group
 n_per_group <- 100
@@ -16,7 +16,7 @@ n_periods <- 10
 # Time variable
 time <- 1:n_periods
 
-# Treatment period
+# Treatment period : creation d'une nouvelle variable
 tp=n_periods/2
 
 # Generate synthetic data
@@ -34,7 +34,7 @@ data = data %>% group_by(Individual) %>% mutate(Treatment = ifelse(Time > tp & G
                                                 Outcome = rnorm(2 * n_periods, mean = case_when(
                                                   Treatment == 1 & Group== "Group 1" ~ -5+0.5*Time+10+0.3*Time,
                                                   Treatment == 0 & Group== "Group 1" ~ -5+0.5*Time,
-                                                  TRUE ~ 0.5*Time))) %>% distinct() %>% 
+                                                  TRUE ~ 0.5*Time))) %>% distinct() %>%
   group_by(Individual, Group) %>% mutate(TreatmentPeriod = if(is.na(which(Treatment>0)[1])){0}else{which(Treatment>0)[1]})
 
 # Rename individuals to be unique
@@ -52,25 +52,34 @@ diD_model <- lm(Outcome ~ Treatment + Time + Treatment:Time + Group, data = data
 # Display DiD model summary
 summary(diD_model)
 
+
+data2 = data[data$Group == "Group 1",]
+
+diD_model2 <- lm(Outcome ~ Treatment + Time + Treatment:Time, data = data2)
+
+# Display DiD model summary
+summary(diD_model2)
+
+
 # Event study approach
 
 # generate leads and lags of the treatment
 t0 = 3 # Number of periods before the event
 t1 = 5 # Number of periods after the event
-Dtl <- sapply(-t0:t1, function(l) {1*((data$Time == data$TreatmentPeriod + l) & (data$TreatmentPeriod > 0))})
-Dtl <- as.data.frame(Dtl)
+Dtl2 <- sapply(-t0:t1, function(l) {1*((data2$Time == data2$TreatmentPeriod + l) & (data2$TreatmentPeriod > 0))})
+Dtl2 <- as.data.frame(Dtl2)
 cnames1 <- paste0("Dtmin", t0:1)
-colnames(Dtl) <- c(cnames1, paste0("Dt", 0:t1))
-data <- cbind.data.frame(data, Dtl)
-row.names(data) <- NULL
+colnames(Dtl2) <- c(cnames1, paste0("Dt", 0:t1))
+data2 <- cbind.data.frame(data2, Dtl2)
+row.names(data2) <- NULL
 
 # panel regression
-pdata = pdata.frame(data, index = c("Individual", "Time", "Group"))
+pdata2 = pdata.frame(data2, index = c("Individual", "Time", "Group"))
 # table(index(pdata))
 
-es <- plm(as.formula(paste("Outcome ~", paste(colnames(Dtl), collapse="+"))), data = pdata, model = "within", effect = "twoways")
+es2 <- plm(as.formula(paste("Outcome ~", paste(colnames(Dtl2), collapse="+"))), data = pdata2, model = "within", effect = "twoways")
 
-summary(es)
+summary(es2)
 
 # Plot
 coefs1 <- coef(es)
@@ -85,9 +94,11 @@ cmat <- data.frame(coefs=coefs, ses=ses, exposure=exposure)
 
 ggplot(data = cmat, mapping = aes(y = coefs, x = exposure)) +
   geom_line(linetype = "dashed") +
-  geom_point() + 
+  geom_point() +
   geom_errorbar(aes(ymin = (coefs-1.96*ses), ymax = (coefs+1.96*ses)), width = 0.2) +
   theme_bw()
+
+
 
 vector1 <- c(11.813319, 12.143966, 12.360421, 12.622093,     
              13.214026)
@@ -99,7 +110,4 @@ maregression = lm(y~x, data = df1)
 summary(maregression)
 
 
-#On retrouve (en faisant la régression de outcome sur les Dt0,1,2 (les positifs)) bien le coeff de 0.3 qui nous avait servi à simuler les données post traitement
-# régression linéaire : Treatment:Time  0.27985    0.03295   8.492   <2e-16 ***
-# event study :            x            0.32795    0.03786   8.662  0.00324 ** 
-# les deux approches semblent trouver le bon résultat
+
