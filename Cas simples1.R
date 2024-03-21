@@ -23,13 +23,6 @@ data2 <- data.frame(
   stringsAsFactors = FALSE
 )
 
-data3 <- data.frame(
-  G = rep(c(1, 2, 3), each = n_per_group * n_periods),
-  id = rep(rep(1:n_per_group, each = n_periods), times = 3),
-  period = rep(time, times = 3 * n_per_group),
-  stringsAsFactors = FALSE
-)
-
 
 
 data2 = data2 %>% group_by(id) %>% mutate(treat = ifelse((period > 50 & G == 1) | (period > 75 & G == 2), 1, 0),
@@ -39,6 +32,8 @@ data2 = data2 %>% group_by(id) %>% mutate(treat = ifelse((period > 50 & G == 1) 
                                             treat == 1 & G== 2 ~ -5+10+0.5*period,
                                             treat == 0 & G== 2 ~ -5,
                                             TRUE ~ 0.5))) %>% distinct()
+
+# on crée 3 groupes qui suivent la même tendance pre et post traitement mais le groupe 1 est traité en période 50 et le groupe 2 en période 75
 
 
 data2 <- data2 %>%
@@ -90,6 +85,9 @@ pdata = pdata.frame(data2, index = c("id", "period", "G"))
 es <- plm(as.formula(paste("Y ~", paste(colnames(Dtl), collapse="+"))), data = pdata, model = "within", effect = "twoways")
 
 summary(es)
+
+# dans es on retrouve tous nos coefficients de Dt0, Dt1 etc et ensuite on fait la regression linéaire des coefficients des Dt sur le temps.
+#Normalement nous devrions retrouver 0.5 (c.f manière dont nos données sont simulées) mais ici on trouve 0.3
 
 valeurs_reg_Dt <- as.numeric(coef(es))
 
