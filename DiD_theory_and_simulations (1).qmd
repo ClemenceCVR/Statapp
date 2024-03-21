@@ -5,8 +5,8 @@ format: html
 ---
 
 ```{r}
-#install.packages("devtools")
-#devtools::install_github("bcallaway11/did", force=TRUE)
+install.packages("devtools")
+devtools::install_github("bcallaway11/did", force=TRUE)
 library(did)
 library(plm)
 library(ggplot2)
@@ -162,15 +162,21 @@ We simulate a four periods dataset
 # set simulation parameters
 # (main thing: it generates a dataset that satisfies
 # parallel trends in all periods...including pre-treatment)
-time.periods = 4
+time.periods = 12
 
-sim_parameters = reset.sim(time.periods = time.periods, n = 5000, ipw = TRUE, reg = TRUE)
+sim_parameters = reset.sim(time.periods = time.periods, n = 1000, ipw = TRUE, reg = TRUE)
 
 # generate dynamic effects
 sim_parameters$te.e = 1:time.periods
 
 # generate data set
 data <- build_sim_dataset(sim_parameters)
+
+
+ggplot(data, aes(x = period, y = Y, color = G, linetype = factor(treat))) +
+  geom_point() +
+  labs(x = "period", y = "Y", color = "G", linetype = "treat") +
+  theme_minimal()
 
 head(data)
 ```

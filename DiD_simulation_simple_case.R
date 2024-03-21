@@ -32,7 +32,7 @@ data <- data.frame(
 
 data = data %>% group_by(Individual) %>% mutate(Treatment = ifelse(Time > tp & Group == "Group 1", 1, 0),
                                                 Outcome = rnorm(2 * n_periods, mean = case_when(
-                                                  Treatment == 1 & Group== "Group 1" ~ -5+0.5*Time+10+0.3*Time,
+                                                  Treatment == 1 & Group== "Group 1" ~ -5+0.5*Time+10+22*Time,
                                                   Treatment == 0 & Group== "Group 1" ~ -5+0.5*Time,
                                                   TRUE ~ 0.5*Time))) %>% distinct() %>% 
   group_by(Individual, Group) %>% mutate(TreatmentPeriod = if(is.na(which(Treatment>0)[1])){0}else{which(Treatment>0)[1]})
@@ -89,15 +89,20 @@ ggplot(data = cmat, mapping = aes(y = coefs, x = exposure)) +
   geom_errorbar(aes(ymin = (coefs-1.96*ses), ymax = (coefs+1.96*ses)), width = 0.2) +
   theme_bw()
 
-vector1 <- c(11.813319, 12.143966, 12.360421, 12.622093,     
-             13.214026)
-df1 = data.frame(y = vector1, x = c(0, 1, 2, 3, 4))
+valeurs_reg_Dt <- as.numeric(coef(es))
+
+
+# Afficher les coefficients numériques
+print(valeurs_reg_Dt)
+
+valeurs_reg_Dt_aprestraitement <- valeurs_reg_Dt[(t0+2):(t1+t0+1)]
+
+df1 = data.frame(y = valeurs_reg_Dt_aprestraitement, x = c(1:t1))
 
 
 maregression = lm(y~x, data = df1)
 
 summary(maregression)
-
 
 #On retrouve (en faisant la régression de outcome sur les Dt0,1,2 (les positifs)) bien le coeff de 0.3 qui nous avait servi à simuler les données post traitement
 # régression linéaire : Treatment:Time  0.27985    0.03295   8.492   <2e-16 ***
