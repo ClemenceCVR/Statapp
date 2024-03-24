@@ -269,29 +269,6 @@ head(data2)
 
 #L'objectif de ce code est d'évaluer comment la variable dépendante Y varie par rapport aux différentes périodes temporelles. On normalise à 0 pour mesurer l'impact relatif. 
 
-```{r}
-#-----------------------------------------------------------------------------
-# modify the dataset a bit so that we can run an event study
-#-----------------------------------------------------------------------------
-
-# generate leads and lags of the treatment
-Dtl_copie <- sapply(-(time.periods-1):(time.periods-2), function(l) {
-    dtl_copie <- 1*( (copie_dataset$period == copie_dataset$G + l) & (copie_dataset$G > 0) )
-    dtl_copie
-})
-Dtl_copie <- as.data.frame(Dtl_copie)
-cnames1 <- paste0("Dtmin", (time.periods-1):1)
-colnames(Dtl_copie) <- c(cnames1, paste0("Dt", 0:(time.periods-2)))
-copie_dataset <- cbind.data.frame(copie_dataset, Dtl_copie)
-row.names(copie_dataset) <- NULL
-
-head(copie_dataset)
-```
-
-
-
-
-
 
 ```{r}
 #-----------------------------------------------------------------------------
@@ -314,11 +291,11 @@ summary(es)
 
 # run event study regression
 # normalize effect to be 0 in pre-treatment period
-es_copie <- plm(Y ~ Dtmin3 + Dtmin2 + Dt0 + Dt1 + Dt2, 
-          data = copie_dataset, model = "within", effect = "twoways",
+es2 <- plm(Y ~ Dtmin50 + Dtmin49 + Dtmin48 + Dtmin47 + Dtmin46 + Dtmin45 + Dtmin44 + Dtmin43 + Dtmin42 + Dtmin41 + Dtmin40 + Dtmin39 + Dtmin38 + Dtmin37 + Dtmin36 + Dtmin35 + Dtmin34 + Dtmin33 + Dtmin32 + Dtmin31 + Dtmin30 + Dtmin29 + Dtmin28 + Dtmin27 + Dtmin26 + Dtmin25 + Dtmin24 + Dtmin23 + Dtmin22 + Dtmin21 + Dtmin20 + Dtmin19 + Dtmin18 + Dtmin17 + Dtmin16 + Dtmin15 + Dtmin14 + Dtmin13 + Dtmin12 + Dtmin11 + Dtmin10 + Dtmin9 + Dtmin8 + Dtmin7 + Dtmin6 + Dtmin5 + Dtmin4 + Dtmin3 + Dtmin2 + Dtmin1 + Dt0 + Dt1 + Dt2 + Dt3 + Dt4 + Dt5 + Dt6 + Dt7 + Dt8 + Dt9 + Dt10 + Dt11 + Dt12 + Dt13 + Dt14 + Dt15 + Dt16 + Dt17 + Dt18 + Dt19 + Dt20 + Dt21 + Dt22 + Dt23 + Dt24 + Dt25, 
+          data = data2, model = "within", effect = "twoways",
           index = c("id", "period"))
 
-summary(es_copie)
+summary(es2)
 ```
 
 
@@ -875,3 +852,4 @@ sim <- function(sp_list,
 ##   res$CvMpval
 ## }
 ```
+

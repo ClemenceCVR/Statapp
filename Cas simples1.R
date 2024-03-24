@@ -17,21 +17,21 @@ time <- 1:n_periods
 
 # Generate synthetic data
 data2 <- data.frame(
-  G = rep(c(1, 2, 3), each = n_per_group * n_periods),
+  G = rep(c(50, 75, 0), each = n_per_group * n_periods),
   id = rep(rep(1:n_per_group, each = n_periods), times = 3),
   period = rep(time, times = 3 * n_per_group),
   stringsAsFactors = FALSE
 )
 
 
-
-data2 = data2 %>% group_by(id) %>% mutate(treat = ifelse((period > 50 & G == 1) | (period > 75 & G == 2), 1, 0),
+data2 = data2 %>% group_by(id) %>% mutate(treat = ifelse((period > 50 & G == 50) | (period > 75 & G == 75), 1, 0),
                                           Y = rnorm(3 * n_periods, mean = case_when(
-                                            treat == 1 & G== 1 ~ -5+10+0.5*period,
-                                            treat == 0 & G== 1 ~ -5,
-                                            treat == 1 & G== 2 ~ -5+10+0.5*period,
-                                            treat == 0 & G== 2 ~ -5,
-                                            TRUE ~ 0.5))) %>% distinct()
+                                            treat == 1 & G== 50 ~ -5+0.5*period+10+0.3*period,
+                                            treat == 0 & G== 50 ~ -5+0.5*period,
+                                            treat == 1 & G== 75 ~ -15+0.5*period+10+0.3*period,
+                                            treat == 0 & G== 75 ~ -15+0.5*period,
+                                            TRUE ~ 0.5*period))) %>% distinct()
+
 
 # on crée 3 groupes qui suivent la même tendance pre et post traitement mais le groupe 1 est traité en période 50 et le groupe 2 en période 75
 
@@ -43,9 +43,6 @@ data2 <- data2 %>%
     G == 3 ~ 0,
     TRUE ~ NA_real_  # pour gérer les cas non spécifiés, optionnel
   ))
-
-
-
 
 # Plot the simulated data
 ggplot(data2, aes(x = period, y = Y, color = G, linetype = factor(treat))) +
@@ -103,3 +100,4 @@ df1 = data.frame(y = valeurs_reg_Dt_aprestraitement, x = c(1:t1))
 maregression = lm(y~x, data = df1)
 
 summary(maregression)
+
