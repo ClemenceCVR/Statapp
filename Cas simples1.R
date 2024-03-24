@@ -1,7 +1,9 @@
 # Load required libraries
 library(dplyr)
 library(ggplot2)
-library(broom) # for tidy function
+library(broom)
+library(plm)
+# for tidy function
 
 # Set seed for reproducibility
 set.seed(123)
@@ -38,9 +40,9 @@ data2 = data2 %>% group_by(id) %>% mutate(treat = ifelse((period > 50 & G == 50)
 
 data2 <- data2 %>%
   mutate(TreatmentPeriod = case_when(
-    G == 1 ~ 50,
-    G == 2 ~ 75,
-    G == 3 ~ 0,
+    G == 50 ~ 50,
+    G == 75 ~ 75,
+    G == 0 ~ 0,
     TRUE ~ NA_real_  # pour gérer les cas non spécifiés, optionnel
   ))
 
