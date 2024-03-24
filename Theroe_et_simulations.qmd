@@ -367,6 +367,22 @@ did_att_gt <- att_gt(yname = "Y",
 
 summary(did_att_gt)
 ```
+
+```{r}
+# estimate group-group time average treatment effects
+did_att_gt2 <- att_gt(yname = "Y",
+                     tname = "period",
+                     idname = "id",
+                     gname = "G",
+                     data = data2,
+                     bstrap = TRUE,# set to FALSE for pointwise confidence intervals for group-time average treatment effects
+                     cband = TRUE, 
+                     panel = FALSE) # set to FALSE for pointwise confidence intervals for group-time average treatment effects
+
+summary(did_att_gt2)
+```
+
+
 #Le code agrège les résultats de l'estimation des effets moyens du traitement et crée un graphique
 ```{r}
 # aggregate them into event study plot
@@ -374,6 +390,14 @@ did_es <- aggte(did_att_gt, type = "dynamic")
 
 # plot the event study
 ggdid(did_es)
+```
+
+```{r}
+# aggregate them into event study plot
+did_es2 <- aggte(did_att_gt2, type = "dynamic")
+
+# plot the event study
+ggdid(did_es2)
 ```
 
 Si le *Pre* treatment has a coefficient close to zero, then the parallel trend assumption holds.
