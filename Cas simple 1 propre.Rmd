@@ -135,5 +135,27 @@ Cette méthode nous permet de retrouver les résultats attendus : l'intercept va
 ## Méthode 3 : Utilisation du package Diff and Diff de Callaway
 
 
+```{r}
+install.packages("devtools")
+devtools::install_github("bcallaway11/did", force=TRUE)
+library(did)
+```
+
+```{r}
+# estimate group-group time average treatment effects
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
