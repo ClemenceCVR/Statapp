@@ -143,11 +143,23 @@ library(did)
 
 ```{r}
 # estimate group-group time average treatment effects
+did_att_gt <- att_gt(yname = "Outcome",
+                     tname = "Time",
+                     idname = "Individual",
+                     gname = "TreatmentPeriod",
+                     data = data,
+                     bstrap = TRUE, # set to FALSE for pointwise confidence intervals for group-time average treatment effects
+                     cband = TRUE) # set to FALSE for pointwise confidence intervals for group-time average treatment effects
 
+summary(did_att_gt)
 ```
+```{r}
+# aggregate them into event study plot
+did_es <- aggte(did_att_gt, type = "dynamic")
 
-
-
+# plot the event study
+ggdid(did_es)
+```
 
 
 
