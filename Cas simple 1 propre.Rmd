@@ -153,6 +153,20 @@ did_att_gt <- att_gt(yname = "Outcome",
 
 summary(did_att_gt)
 ```
+
+```{r}
+
+valeurs_reg_methode3_aprestraitement <- did_att_gt$att[51:100]
+
+df2 = data.frame(y = valeurs_reg_methode3_aprestraitement, x = c(1:50))
+
+
+maregression2 = lm(y~x, data = df2)
+
+summary(maregression2)
+```
+On a bien les résultats attendus concernant l'intercept et le coefficient.
+
 ```{r}
 # aggregate them into event study plot
 did_es <- aggte(did_att_gt, type = "dynamic")
