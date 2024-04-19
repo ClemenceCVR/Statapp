@@ -1,0 +1,865 @@
+---
+title: "DID_simulations"
+format: html
+editor: visual
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(plm)
+library(fixest)
+```
+
+# 1. Cas d'école
+
+The "canonical" version of DiD involves two periods and two groups. The untreated group never participates in the treatment, and the treated group becomes treated in the second period.
+
+The leading approach in applied work is to try to estimate the effect of the treatment using a two-way fixed effects (TWFE) linear regression. This works great in the case with two periods, but there are a number of recent methodological papers that suggest that there may be substantial drawbacks to using TWFE with multiple time periods.
+
+## 1.1. Theory & assumptions
+
+We define the following model:
+
+$$Y_{i,t}=D_i*Y_{i,t}(1)+(1-D_i)Y_{i,t}(0)$$
+
+With :
+
+-   $Y_{i,t}(0)$ the outcome that unit i would experience in period $t$ if they did not participate in the treatment;
+
+-   $Y_{i,t}(1)$ the outcome that unit i would experience in period $t$ if they did participate in the treatment;
+
+-   $D=1$ for units in the treated group and $D=0$ for units in the untreated group.
+
+The main parameter of interest in most DiD designs is the **Average Treatment Effect** on the Treated (ATT). It is given by $$ATT=E[Y_t(1)-Y_t(0)|D=1]$$ This is the difference between treated and untreated potential outcomes, on average, for units in the treated group.
+
+The main assumption in DiD designs is called the **Parallel Trends Assumption**: $$E[Y_t(0)-Y_{t-1}(0)|D=1]=E[Y_t(0)-Y_{t-1}|D=0]$$ In words, this assumption says that the change (or "path") in outcomes over time that units in the treated group would have experienced if they had not participated in the treatment is the same as the path of outcomes that units in the untreated group actually experienced.
+
+Under the parallel trends assumption, the **ATT** is identified and given by $$ATT=E[Y_t-Y_{t-1}|D=1]-E[Y_t-Y_{t-1}|D=0]$$
+
+By far the most common approach to trying to estimate the effect of a binary treatment in this setup is the **Two way fixed effects regressions (TWFE)** linear regression.
+
+$$Y_{i,t}=\theta_t+\eta_i+\alpha D_{i,t}+ \nu_{i,t}$$ where: - $\theta_t$ is a time fixed effect, - $\eta_i$ is a unit fixed effect, - $D_{i,t}$ is a treatment dummy variable, - $\nu_{i,t}$ are time varying unobservables that are mean independent of everything else - $\alpha$ is presumably the parameter of interest. It is often interpreted as the average effect of participating in the treatment.
+
+**When will TWFE work?**
+
+-   **Effects really aren't heterogeneous.** If the effect of participating in the treatment really is $\alpha$ for all units, TWFE will work great.
+
+    That being said, in many applications, treatment effects are very likely to be heterogeneous, they may vary across different units or exhibit dynamics or change across different time periods. In particular applications, this is worth thinking about, but, at least in our view, we think that heterogeneous effects of participating in some treatment is the leading case.
+
+-   **There are only two time periods.** This is the canonical case (2 periods, one group becomes treated in the second period, the other is never treated). In this case, under parallel trends and no-anticipation, $\alpha$ is going to be numerically equal to the ATT. In other words, in this case, even though it looks like you have restricted the effect of participating in the treatment to be the same across all units, TWFE exhibits robustness to treatment effect heterogeneity.
+
+    Unfortunately, this robustness to treatment effect heterogeneity does not continue to hold when there are more periods and groups become treated at different points in time.
+
+## 1.2. Simulate data
+
+On simule un output suivant une loi normale dont la moyenne change en fonction du groupe: traité ou non traité; avec un effet constant.
+
+```{r}
+set.seed(123)
+
+# Number of individuals per group
+n_per_group <- 100
+
+# Number of time periods
+n_periods <- 100
+
+# Time variable
+time <- 1:n_periods
+
+# Post period
+tp=n_periods/2
+```
+
+```{r}
+# Generate synthetic data
+data <- data.frame(
+  Group = rep(c("Group 1", "Group 2"), each = n_per_group * n_periods),
+  Individual = rep(rep(1:n_per_group, each = n_periods), times = 2),
+  Time = rep(time, times = 2 * n_per_group),
+  stringsAsFactors = FALSE
+)
+
+data = data %>% group_by(Individual) %>% mutate(Treated = ifelse(Group == "Group 1", 1, 0),
+                                                Post = ifelse(Time > tp & Group == "Group 1", 1, 0),
+                                                Outcome = rnorm(2 * n_periods, mean = case_when(
+                                                  Post == 1 & Group== "Group 1" ~ -5+0.5*Time+10,
+                                                  Post == 0 & Group== "Group 1" ~ -5+0.5*Time,
+                                                  TRUE ~ 5+0.5*Time))) %>% distinct() %>% 
+  group_by(Individual, Group) %>% mutate(TreatmentPeriod = if(is.na(which(Post>0)[1])){0}else{which(Post>0)[1]})
+
+# Rename individuals to be unique
+data$Individual = rep(1:(n_per_group*2), each = n_periods)
+```
+
+```{r}
+# Plot the simulated data
+ggplot(data, aes(x = Time, y = Outcome, color = Group, linetype = factor(Post))) +
+  geom_point() +
+  labs(x = "Time", y = "Outcome", color = "Group", linetype = "Post") +
+  theme_minimal()
+```
+
+## 2.3. Estimation
+
+### 2.3.1. Linear DiD
+
+```{r}
+# Estimate DiD parameters using linear regression
+diD_model <- lm(Outcome ~ Post + Time + Post:Time + Group - 1, data = data)
+
+# Display DiD model summary
+summary(diD_model)
+```
+
+On voit que le groupe2 n'a pas la même moyenne que le groupe 1, que le temps a un effet positif, que le traitement a un effet positif mais indépendant du temps.
+
+### 2.3.2. Event study - Validation de la parallel trend
+
+L'idée et de regarder ce qui se passe autour de la période de traitement. Comme si tout le monde est traité au même moment.
+
+#### A) Avec le package "fixest"
+
+[Reference package](https://cran.r-project.org/web/packages/fixest/vignettes/fixest_walkthrough.html)
+
+[Manuel fonctions du package](https://cran.r-project.org/web/packages/fixest/fixest.pdf)
+
+[Documentation Event Sudy](https://docs.iza.org/dp13524.pdf)
+
+On réfère la période de référence du traitement pour éviter la colinératié.
+
+```{r}
+est_did = feols(Outcome ~ i(Time, Treated, tp) | Individual + Time + Group, data)
+
+iplot(est_did)
+```
+
+On valide bien la parallel trend et on voit l'effet one shot du traitement.
+
+#### B) Modélisation manuelle
+
+On choisit un nombre de périodes avant et après traitement à analyser. On créer une base de données binaire qui vaut 1 si l'intitulé de la période correspond et 0 sinon.
+
+```{r}
+# generate leads and lags of the Post
+t0 = 10 # Number of periods before the event
+t1 = 20 # Number of periods after the event
+
+Dtl <- sapply(-t0:t1, function(l) {1*((data$Time == data$TreatmentPeriod + l) & (data$TreatmentPeriod > 0))})
+Dtl <- as.data.frame(Dtl)
+colnames(Dtl) <- c(paste0("Dtmin", t0:1), paste0("Dt", 0:t1))
+
+pdata <- cbind.data.frame(data, Dtl)
+row.names(pdata) <- NULL
+```
+
+On supprime ensuite toutes les observations pour des dates non-étudiées.
+
+On définit la période de post traitement comme période de référence. On met donc Dtmin1=0. cela évite les problèmes de colinéarité entre les variables explicatives.
+
+```{r}
+Time2Delete = (pdata %>% filter(Treated==1) %>% mutate(IsAnalyzed = rowSums(select(., colnames(Dtl)))) %>%
+  filter(IsAnalyzed==0) %>% select(Time) %>% unique)$Time
+
+# Set previous treatment coefficient to 0 to avoid colinearity
+pdata$Dtmin1=0
+
+pdata = pdata %>% filter(!Time %in% Time2Delete) %>% mutate(Time = Time-min(Time)+1)
+
+head(pdata, 10)
+```
+
+On réalise ensuite une estimation en panel avec twoway fixed effects.
+
+```{r}
+# panel regression
+pdata = pdata.frame(pdata, index = c("Individual", "Time"))
+# table(index(pdata))
+
+es <- plm(as.formula(paste("Outcome ~", paste(colnames(Dtl), collapse="+"))), data = pdata, model = "within", effect = "twoways")
+
+summary(es)
+```
+
+On trouve bien pas d'effet siginficatif avant le traitement, donc cela valide la parrallel trend assumption. Puis des effets significatifs et croissant post traitement.
+
+```{r}
+# Plot
+coefs1 <- coef(es)
+ses1 <- sqrt(diag(summary(es)$vcov))
+idx.pre <- which(grepl("min", names(coefs1)))
+idx.post <- (max(which(grepl("min", names(coefs1))))+1):length(coefs1)
+coefs <- c(coefs1[idx.pre], 0, coefs1[idx.post])
+ses <- c(ses1[idx.pre], 0, ses1[idx.post])
+exposure <- -max(which(grepl("min", names(coefs1)))):(length(coefs1)-max(which(grepl("min", names(coefs1)))))
+
+cmat <- data.frame(coefs=coefs, ses=ses, exposure=exposure)
+
+ggplot(data = cmat, mapping = aes(y = coefs, x = exposure)) +
+  geom_line(linetype = "dashed") +
+  geom_point() + 
+  geom_errorbar(aes(ymin = (coefs-1.96*ses), ymax = (coefs+1.96*ses)), width = 0.2) +
+  theme_bw()
+```
+
+# 2. cas plus complexes
+
+## 2.1. Theory & assumtions
+
+### Notations
+
+Now let's move to a more general case where there are $T$ total time periods. Denote particular time periods by $t$ where $t=1,…,T$.
+
+Let's first provide some extended notation:
+
+-   $Y_{i,t}(0)$ is unit i's untreated potential outcome. This is the outcome that unit i would experience in period $t$ if they do not participate in the treatment.
+
+-   $Y_{i,t}(g)$ is unit i's potential outcome in time period $t$ if they become treated in period g.
+
+-   $G_i$ is the time period when unit i becomes treated (often groups are defined by the time period when a unit becomes treated; hence, the G notation).
+
+-   $C_i$ is an indicator variable for whether unit i is in a never-treated group.
+
+-   $D_{i,t}$ is an indicator variable for whether unit i has been treated by time $t$.
+
+-   $Y_{i,t}$ is unit i's observed outcome in time period t.
+
+-   $X_i$ a vector of pre-treatment covariates.
+
+For units in the never-treated group, $Y_{i,t}=Y_{i,t}(0)$ in all time periods. For units in other groups, we observe $$Y_{i,t}=1_{G_i>t}*Y_{i,t}(0)+1_{G_i \leq t}Y_{i,t}(G_i)$$.
+
+### Main assumptions
+
+**Staggered Treatment Adoption Assumption**: Recall that $D_{i,t}=1$ if a unit i has been treated by time t and $D_{i,t}=0$ otherwise. Then, for $t=1,...,T-1$, if $D_{i,t}=1$ then $D_{i,t+1}=1$.
+
+*Staggered treatment* adoption implies that once a unit participates in the treatment, they remain treated. In other words, units do not "forget" about their treatment experience.
+
+**Parallel Trends Assumption based on never-treated units**: For all $g=2,...,T$ and $t=2,...,T$, with $t\geq g$, we have $$E[Y_t(0)-Y_{t-1}(0)|G=g]=E[Y_t(0)-Y_{t-1}(0)|C=1]$$
+
+This is a natural extension of the parallel trends assumption in the two periods and two groups case. It says that, in the absence of treatment, average untreated potential outcomes for the group first treated in time g and for the "never treated" group would have followed parallel paths in all post-treatment periods $t \geq g$.
+
+This presumes that **(i)** a (large enough) "never-treated" group is available in the data, and **(ii)** these units are "similar enough" to the eventually treated units such that they can indeed be used as a valid comparison group.
+
+In situations where these conditions are not satisfied, one can use an alternative parallel trends assumption that uses the not-yet treated units as valid comparison groups.
+
+**Parallel Trends Assumption based on not-yet treated units**: For all $g=2,...,T$, $s,t=2,...,T$ with $t \geq g$ and $s \geq t$ we assume $$E[Y_t(0)-Y_{t-1}(0)|G=g]=E[Y_t(0)-Y_{t-1}(0)|D_s=0,G \neq g]$$
+
+In plain English, this assumption states that one can use the not-yet-treated by time s $(s \geq t)$ units as valid comparison groups when computing the average treatment effect for the group first treated in time $g$.
+
+**Parallel Trends Conditional on Covariates**:
+
+In many cases, the parallel trends assumption is substantially more plausible if it holds after conditioning on observed pre-treatment covariates. In other words, if the parallel trends assumptions are modified to be:
+
+-   **Conditional Parallel Trends Assumption based on never-treated units**: For all $g=2,...,T$ and $t=2,...,T$ with $t \geq g$ we get $$E[Y_t(0)-Y_{t-1}(0)|X,G=g]=E[Y_t(0)-Y_{t-1}(0)|X,C=1]$$.
+
+-   **Parallel Trends Assumption based on not-yet treated units**: For all $g=2,...,T$ and $s,t=2,...,T$ with $t \geq g$ and $s \geq t$ we get $$E[Y_t(0)-Y_{t-1}(0)|X,G=g]=E[Y_t(0)-Y_{t-1}(0)|X,D_s=0,G \neq g]$$.
+
+Importantly, this assumptions allow for covariate-specific trends in outcomes across groups, which can be particularly important in setups where the distribution of covariates varies across groups. An example of a case where this assumption is attractive is one where a researcher is interested in estimating the effect of participating in job training on earnings. In that case, if the path of earnings (in the absence of participating in job training) depends on things like education, previous occupation, or years of experience (which it almost certainly does), then it would be important to condition on these types of variables in order to make parallel trends more credible.
+
+### Parameters of interest
+
+**Group-Time Average Treatment Effects**:
+
+A natural way to generalize the parameter of interest (the **ATT**) from the two periods and two groups case to the multiple periods case is to define group-time average treatment effects: $$ATT(g,t)=E[Y_t(g)-Y_t(0)|G=g]$$
+
+This is the average effect of participating in the treatment for units in group $g$ at time period $t$.
+
+Under either version of the parallel trends assumptions mentioned above, it is straightforward to show that group-time average treatment effects are identified:
+
+-   Suppose the parallel trends assumption based on *"never-treated units"*, we have that, for all $t \geq g$, $ATT(g,t)=E[Y_t-Y_{g-1}|G=g]-E[Y_t-Y_{g-1}|C=1]$.
+
+-   Suppose the parallel trends assumption based on *"not-yet-treated units"*, we have that, for all $t \geq g$, $ATT(g,t)=E[Y_t-Y_{g-1}|G=g]-E[Y_t-Y_{g-1}|D_t=0,G \neq g]$.
+
+These group-time average treatment effects are the building blocks of understanding the effect of participating in a treatment in DiD designs with multiple time periods.
+
+When considering parallel trends conditional on some covariates, **ATT** is still the parameter of interest and one needs to estimate the change in outcomes for units in the untreated group conditional on X, but average out X over the distribution of covariates for individuals in group g to obtain $ATT(g,t)$.
+
+**Aggregating Group-Time Average Treatment Effects**:
+
+Group-time average treatment effects are natural parameters to identify in the context of DiD with multiple periods and multiple groups. But in many applications, there may be a lot of them. There are some benefits and costs here. The main benefit is that it is relatively straightforward to think about heterogeneous effects across groups and time using group-time average treatment effects. On the other hand, it can be hard to summarize them (e.g., they are not just a single number).
+
+There are plenty of possible ways to aggregate $ATT(g,t)$:
+
+-   First, consider the average effect of participating in the treatment, separately for each group. This is given by $$\theta_S(g)=\frac{1}{T-g+1} \sum_{t=2}^{T} 1_{g \leq t} ATT(g,t)$$
+
+-   Furthermore, it is fairly straightforward to further aggregate $\theta_S(g)$ to get an easy-to-interpret overall effect parameter, $$\theta^O_S:= \sum_{g=2}^{T} \theta_S(g) P(G=g)$$ $\theta^O_S$ is the overall effect of participating in the treatment across all groups that have ever participated in the treatment. This is close to being a multi-period analogue of the ATT in the two period case.
+
+-   Understanding treatment effect dynamics, in line with event-study-type of analysis. In this case, a natural way to aggregate the group-time average treatment effect to highlight treatment effect dynamics is given by $$\theta_D(e):= \sum_{g=2}^{T} 1_{g+e \leq T} ATT(g,g+e) P(G=g|G+e \leq T)$$
+
+## 2.2. Cas avec traitement binaire effet constant mais qui intervient à plusieurs périodes
+
+### 2.2.1. Simulate data
+
+```{r}
+set.seed(123)
+
+# Number of individuals per group
+n_per_group <- 100
+
+# Number of time periods
+n_periods <- 100
+
+# Time variable
+time <- 1:n_periods
+
+# Post period
+tp=c(20, 30)
+```
+
+```{r}
+# Generate synthetic data
+data <- data.frame(
+  Group = rep(c("Group 1", "Group 2", "Group 3"), each = n_per_group * n_periods),
+  Individual = rep(rep(1:n_per_group, each = n_periods), times = 3),
+  Time = rep(time, times = 3 * n_per_group),
+  stringsAsFactors = FALSE
+)
+
+data = data %>% group_by(Individual) %>% mutate(Treated = ifelse(Group %in% c("Group 1", "Group 2"), 1, 0),
+                                                Post = case_when(
+                                                  Group== "Group 1" & Time > tp[1] ~ 1,
+                                                  Group== "Group 2" & Time > tp[2] ~ 1,
+                                                  TRUE ~ 0),
+                                                Outcome = rnorm(3 * n_periods, mean = case_when(
+                                                  Post == 1 & Group== "Group 1" ~ -5+0.5*Time+20,
+                                                  Post == 0 & Group== "Group 1" ~ -5+0.5*Time,
+                                                  Post == 1 & Group== "Group 2" ~ 0.5*Time+20,
+                                                  Post == 0 & Group== "Group 2" ~ 0.5*Time,
+                                                  TRUE ~ 5+0.5*Time))) %>% distinct() %>%
+  group_by(Individual, Group) %>% mutate(TreatmentPeriod = if(is.na(which(Post>0)[1])){0}else{which(Post>0)[1]})
+
+# Rename individuals to be unique
+data$Individual = rep(1:(n_per_group*3), each = n_periods)
+```
+
+```{r}
+# Plot the simulated data
+ggplot(data, aes(x = Time, y = Outcome, color = Group, linetype = factor(Post))) +
+  geom_point() +
+  labs(x = "Time", y = "Outcome", color = "Group", linetype = "Post") +
+  theme_minimal()
+```
+
+### 2.2.2. Estimation
+
+#### Linear DiD
+
+```{r}
+# Estimate DiD parameters using linear regression
+diD_model <- lm(Outcome ~ Post + Time + Post:Time + Group - 1, data = data)
+
+# Display DiD model summary
+summary(diD_model)
+```
+
+Les résultats sont corrects.
+
+#### Event study
+
+On doit modifier légèrement la table pour ajouter une variable "Time2Treatment"
+
+On réfère comme période de référence -1 mais aussi -1000 pour expliciter les individus non-traités.
+
+```{r}
+data = data %>% mutate(Time2Treatment = ifelse(Treated==1, Time-TreatmentPeriod, -1000))
+est_did = feols(Outcome ~ i(Time2Treatment, ref = c(-1, -1000)) | Individual + Time + Group, data)
+
+iplot(est_did)
+```
+
+On observe que l'effet estimé du traitement est correct.
+
+#### Modélisation manuelle
+
+```{r}
+# generate leads and lags of the Post
+t0 = 10 # Number of periods before the event
+t1 = 20 # Number of periods after the event
+
+Dtl <- sapply(-t0:t1, function(l) {1*((data$Time == data$TreatmentPeriod + l) & (data$TreatmentPeriod > 0))})
+Dtl <- as.data.frame(Dtl)
+colnames(Dtl) <- c(paste0("Dtmin", t0:1), paste0("Dt", 0:t1))
+
+pdata <- cbind.data.frame(data, Dtl)
+row.names(pdata) <- NULL
+
+Time2Delete = (pdata %>% filter(Treated==1) %>% mutate(IsAnalyzed = rowSums(select(., colnames(Dtl)))) %>%
+  filter(IsAnalyzed==0) %>% select(Time) %>% unique)$Time
+
+# Set previous treatment coefficient to 0 to avoid colinearity
+pdata$Dtmin1=0
+
+pdata = pdata %>% filter(!Time %in% Time2Delete) %>% mutate(Time = Time-min(Time)+1)
+```
+
+```{r}
+# panel regression
+pdata = pdata.frame(pdata, index = c("Individual", "Time", "Group"))
+# table(index(pdata))
+
+es <- plm(as.formula(paste("Outcome ~", paste(colnames(Dtl), collapse="+"))), data = pdata, model = "within", effect = "twoways")
+```
+
+```{r}
+# Plot
+coefs1 <- coef(es)
+ses1 <- sqrt(diag(summary(es)$vcov))
+idx.pre <- which(grepl("min", names(coefs1)))
+idx.post <- (max(which(grepl("min", names(coefs1))))+1):length(coefs1)
+coefs <- c(coefs1[idx.pre], 0, coefs1[idx.post])
+ses <- c(ses1[idx.pre], 0, ses1[idx.post])
+exposure <- -max(which(grepl("min", names(coefs1)))):(length(coefs1)-max(which(grepl("min", names(coefs1)))))
+
+cmat <- data.frame(coefs=coefs, ses=ses, exposure=exposure)
+
+ggplot(data = cmat, mapping = aes(y = coefs, x = exposure)) +
+  geom_line(linetype = "dashed") +
+  geom_point() + 
+  geom_errorbar(aes(ymin = (coefs-1.96*ses), ymax = (coefs+1.96*ses)), width = 0.2) +
+  theme_bw()
+```
+
+On voit que l'effet estimé est correct.
+
+## 2.3. Cas avec traitement binaire effet constant mais qui intervient à plusieurs périodes et dépend du groupe
+
+### 2.3.1. Simulate data
+
+```{r}
+set.seed(123)
+
+# Number of individuals per group
+n_per_group <- 100
+
+# Number of time periods
+n_periods <- 100
+
+# Time variable
+time <- 1:n_periods
+
+# Post period
+tp=c(20, 30)
+```
+
+```{r}
+# Generate synthetic data
+data <- data.frame(
+  Group = rep(c("Group 1", "Group 2", "Group 3"), each = n_per_group * n_periods),
+  Individual = rep(rep(1:n_per_group, each = n_periods), times = 3),
+  Time = rep(time, times = 3 * n_per_group),
+  stringsAsFactors = FALSE
+)
+
+data = data %>% group_by(Individual) %>% mutate(Treated = ifelse(Group %in% c("Group 1", "Group 2"), 1, 0),
+                                                Post = case_when(
+                                                  Group== "Group 1" & Time > tp[1] ~ 1,
+                                                  Group== "Group 2" & Time > tp[2] ~ 1,
+                                                  TRUE ~ 0),
+                                                Outcome = rnorm(3 * n_periods, mean = case_when(
+                                                  Post == 1 & Group== "Group 1" ~ -5+0.5*Time+20,
+                                                  Post == 0 & Group== "Group 1" ~ -5+0.5*Time,
+                                                  Post == 1 & Group== "Group 2" ~ 0.5*Time+10,
+                                                  Post == 0 & Group== "Group 2" ~ 0.5*Time,
+                                                  TRUE ~ 5+0.5*Time))) %>% distinct() %>%
+  group_by(Individual, Group) %>% mutate(TreatmentPeriod = if(is.na(which(Post>0)[1])){0}else{which(Post>0)[1]})
+
+# Rename individuals to be unique
+data$Individual = rep(1:(n_per_group*3), each = n_periods)
+```
+
+```{r}
+# Plot the simulated data
+ggplot(data, aes(x = Time, y = Outcome, color = Group, linetype = factor(Post))) +
+  geom_point() +
+  labs(x = "Time", y = "Outcome", color = "Group", linetype = "Post") +
+  theme_minimal()
+```
+
+### 2.3.2. Estimation
+
+#### Linear DiD
+
+```{r}
+# Estimate DiD parameters using linear regression
+diD_model <- lm(Outcome ~ Post + Time + Post:Time + Group - 1, data = data)
+
+# Display DiD model summary
+summary(diD_model)
+```
+
+On observe l'ATT mais pas l'effet par groupe.
+
+#### Event study
+
+On doit modifier légèrement la table pour ajouter une variable "Time2Treatment"
+
+On réfère comme période de référence -1 mais aussi -1000 pour expliciter les individus non-traités.
+
+```{r}
+data = data %>% mutate(Time2Treatment = ifelse(Treated==1, Time-TreatmentPeriod, -1000))
+est_did = feols(Outcome ~ i(Time2Treatment, ref = c(-1, -1000)) | Individual + Time + Group, data)
+
+iplot(est_did)
+```
+
+C'est le bazarre.
+
+#### Modélisation manuelle
+
+```{r}
+# generate leads and lags of the Post
+t0 = 10 # Number of periods before the event
+t1 = 20 # Number of periods after the event
+
+Dtl <- sapply(-t0:t1, function(l) {1*((data$Time == data$TreatmentPeriod + l) & (data$TreatmentPeriod > 0))})
+Dtl <- as.data.frame(Dtl)
+colnames(Dtl) <- c(paste0("Dtmin", t0:1), paste0("Dt", 0:t1))
+
+pdata <- cbind.data.frame(data, Dtl)
+row.names(pdata) <- NULL
+
+Time2Delete = (pdata %>% filter(Treated==1) %>% mutate(IsAnalyzed = rowSums(select(., colnames(Dtl)))) %>%
+  filter(IsAnalyzed==0) %>% select(Time) %>% unique)$Time
+
+# Set previous treatment coefficient to 0 to avoid colinearity
+pdata$Dtmin1=0
+
+pdata = pdata %>% filter(!Time %in% Time2Delete) %>% mutate(Time = Time-min(Time)+1)
+```
+
+```{r}
+# panel regression
+pdata = pdata.frame(pdata, index = c("Individual", "Time", "Group"))
+# table(index(pdata))
+
+es <- plm(as.formula(paste("Outcome ~", paste(colnames(Dtl), collapse="+"))), data = pdata, model = "within", effect = "twoways")
+```
+
+```{r}
+# Plot
+coefs1 <- coef(es)
+ses1 <- sqrt(diag(summary(es)$vcov))
+idx.pre <- which(grepl("min", names(coefs1)))
+idx.post <- (max(which(grepl("min", names(coefs1))))+1):length(coefs1)
+coefs <- c(coefs1[idx.pre], 0, coefs1[idx.post])
+ses <- c(ses1[idx.pre], 0, ses1[idx.post])
+exposure <- -max(which(grepl("min", names(coefs1)))):(length(coefs1)-max(which(grepl("min", names(coefs1)))))
+
+cmat <- data.frame(coefs=coefs, ses=ses, exposure=exposure)
+
+ggplot(data = cmat, mapping = aes(y = coefs, x = exposure)) +
+  geom_line(linetype = "dashed") +
+  geom_point() + 
+  geom_errorbar(aes(ymin = (coefs-1.96*ses), ymax = (coefs+1.96*ses)), width = 0.2) +
+  theme_bw()
+```
+
+On estime un effet moyen, l'ATT qui n'est pas juste.
+
+## 2.4. Cas binaire avec effet similaire pour tous les groupes mais effet qui est croissant du temps
+
+### 2.4.1. Simulate data
+
+```{r}
+set.seed(123)
+
+# Number of individuals per group
+n_per_group <- 100
+
+# Number of time periods
+n_periods <- 100
+
+# Time variable
+time <- 1:n_periods
+
+# Post period
+tp=n_periods/2
+```
+
+```{r}
+# Generate synthetic data
+data <- data.frame(
+  Group = rep(c("Group 1", "Group 2"), each = n_per_group * n_periods),
+  Individual = rep(rep(1:n_per_group, each = n_periods), times = 2),
+  Time = rep(time, times = 2 * n_per_group),
+  stringsAsFactors = FALSE
+)
+
+data = data %>% group_by(Individual) %>% mutate(Treated = ifelse(Group == "Group 1", 1, 0),
+                                                Post = ifelse(Time > tp & Group == "Group 1", 1, 0),
+                                                Outcome = rnorm(2 * n_periods, mean = case_when(
+                                                  Post == 1 & Group== "Group 1" ~ -5+0.5*Time+10+0.3*Time,
+                                                  Post == 0 & Group== "Group 1" ~ -5+0.5*Time,
+                                                  TRUE ~ 5+0.5*Time))) %>% distinct() %>%
+  group_by(Individual, Group) %>% mutate(TreatmentPeriod = if(is.na(which(Post>0)[1])){0}else{which(Post>0)[1]})
+
+# Rename individuals to be unique
+data$Individual = rep(1:(n_per_group*2), each = n_periods)
+```
+
+```{r}
+# Plot the simulated data
+ggplot(data, aes(x = Time, y = Outcome, color = Group, linetype = factor(Post))) +
+  geom_point() +
+  labs(x = "Time", y = "Outcome", color = "Group", linetype = "Post") +
+  theme_minimal()
+```
+
+### 2.4.2. Estimation
+
+#### Linear DiD
+
+```{r}
+# Estimate DiD parameters using linear regression
+diD_model <- lm(Outcome ~ Post + Time + Post:Time + Group - 1, data = data)
+
+# Display DiD model summary
+summary(diD_model)
+```
+
+Ca fonctionne plutôt bien.
+
+#### Event study
+
+```{r}
+est_did = feols(Outcome ~ i(Time, Treated, tp) | Individual + Time + Group, data)
+
+iplot(est_did)
+```
+
+On observe que l'effet estimé du traitement est incorrect.
+
+#### Modélisation manuelle
+
+```{r}
+# generate leads and lags of the Post
+t0 = 10 # Number of periods before the event
+t1 = 20 # Number of periods after the event
+
+Dtl <- sapply(-t0:t1, function(l) {1*((data$Time == data$TreatmentPeriod + l) & (data$TreatmentPeriod > 0))})
+Dtl <- as.data.frame(Dtl)
+colnames(Dtl) <- c(paste0("Dtmin", t0:1), paste0("Dt", 0:t1))
+
+pdata <- cbind.data.frame(data, Dtl)
+row.names(pdata) <- NULL
+
+Time2Delete = (pdata %>% filter(Treated==1) %>% mutate(IsAnalyzed = rowSums(select(., colnames(Dtl)))) %>%
+  filter(IsAnalyzed==0) %>% select(Time) %>% unique)$Time
+
+# Set previous treatment coefficient to 0 to avoid colinearity
+pdata$Dtmin1=0
+
+pdata = pdata %>% filter(!Time %in% Time2Delete) %>% mutate(Time = Time-min(Time)+1)
+```
+
+```{r}
+# panel regression
+pdata = pdata.frame(pdata, index = c("Individual", "Time", "Group"))
+# table(index(pdata))
+
+es <- plm(as.formula(paste("Outcome ~", paste(colnames(Dtl), collapse="+"))), data = pdata, model = "within", effect = "twoways")
+```
+
+```{r}
+# Plot
+coefs1 <- coef(es)
+ses1 <- sqrt(diag(summary(es)$vcov))
+idx.pre <- which(grepl("min", names(coefs1)))
+idx.post <- (max(which(grepl("min", names(coefs1))))+1):length(coefs1)
+coefs <- c(coefs1[idx.pre], 0, coefs1[idx.post])
+ses <- c(ses1[idx.pre], 0, ses1[idx.post])
+exposure <- -max(which(grepl("min", names(coefs1)))):(length(coefs1)-max(which(grepl("min", names(coefs1)))))
+
+cmat <- data.frame(coefs=coefs, ses=ses, exposure=exposure)
+
+ggplot(data = cmat, mapping = aes(y = coefs, x = exposure)) +
+  geom_line(linetype = "dashed") +
+  geom_point() + 
+  geom_errorbar(aes(ymin = (coefs-1.96*ses), ymax = (coefs+1.96*ses)), width = 0.2) +
+  theme_bw()
+```
+
+On voit que l'effet estimé du traitement n'est pas le bon.
+
+# 3. Staggered difference-in-differences
+
+L'objectif est de modifier l'approche DiD classique pour tenir compte des spécificités précédentes. - (a) different cohorts get the treatment at different periods, - (b) the effect of the treatment is cohort-specific and increasing over time.
+
+## 3.1. Cas avec effet constant dans le temps
+
+### 3.1.1. Simulation
+
+```{r}
+set.seed(123)
+
+# Number of individuals per group
+n_per_group <- 100
+
+# Number of time periods
+n_periods <- 100
+
+# Time variable
+time <- 1:n_periods
+
+# Post period
+tp=c(20, 30)
+```
+
+```{r}
+# Generate synthetic data
+data <- data.frame(
+  Group = rep(c("Group 1", "Group 2", "Group 3"), each = n_per_group * n_periods),
+  Individual = rep(rep(1:n_per_group, each = n_periods), times = 3),
+  Time = rep(time, times = 3 * n_per_group),
+  stringsAsFactors = FALSE
+)
+
+data = data %>% group_by(Individual) %>% mutate(Treated = ifelse(Group %in% c("Group 1", "Group 2"), 1, 0),
+                                                Post = case_when(
+                                                  Group== "Group 1" & Time > tp[1] ~ 1,
+                                                  Group== "Group 2" & Time > tp[2] ~ 1,
+                                                  TRUE ~ 0),
+                                                Outcome = rnorm(3 * n_periods, mean = case_when(
+                                                  Post == 1 & Group== "Group 1" ~ -5+0.5*Time+20,
+                                                  Post == 0 & Group== "Group 1" ~ -5+0.5*Time,
+                                                  Post == 1 & Group== "Group 2" ~ 0.5*Time+10,
+                                                  Post == 0 & Group== "Group 2" ~ 0.5*Time,
+                                                  TRUE ~ 5+0.5*Time))) %>% distinct() %>%
+  group_by(Individual, Group) %>% mutate(TreatmentPeriod = if(is.na(which(Post>0)[1])){0}else{which(Post>0)[1]})
+
+# Rename individuals to be unique
+data$Individual = rep(1:(n_per_group*3), each = n_periods)
+```
+
+```{r}
+# Plot the simulated data
+ggplot(data, aes(x = Time, y = Outcome, color = Group, linetype = factor(Post))) +
+  geom_point() +
+  labs(x = "Time", y = "Outcome", color = "Group", linetype = "Post") +
+  theme_minimal()
+```
+
+### 3.1.2. Estimation
+
+#### Linear DiD
+
+```{r}
+# Estimate DiD parameters using linear regression
+diD_model <- lm(Outcome ~ Post + Time + Post:Time + Group - 1, data = data)
+
+# Display DiD model summary
+summary(diD_model)
+```
+
+On voit que cette approche fonctionne bien pour estimer l'ATT, le temps et l'effet croissant du traitement avec le temps, mais plus les constantes de chaque groupe.
+
+#### Event study
+
+```{r}
+est_did = feols(Outcome ~ sunab(TreatmentPeriod, Time) | Individual + Time + Group, data)
+iplot(est_did)
+```
+
+```{r}
+summary(est_did, agg = "att")
+```
+
+```{r}
+etable(est_did, agg = FALSE)
+```
+
+On voit que l'on arrive bien à estimer l'ATT mais également l'effet par groupe traité par période.
+
+## 3.2. Cas avec effet croissant dans le temps
+
+### 3.2.1. Simulation
+
+```{r}
+set.seed(123)
+
+# Number of individuals per group
+n_per_group <- 100
+
+# Number of time periods
+n_periods <- 100
+
+# Time variable
+time <- 1:n_periods
+
+# Post period
+tp=c(20, 30)
+```
+
+```{r}
+# Generate synthetic data
+data <- data.frame(
+  Group = rep(c("Group 1", "Group 2", "Group 3"), each = n_per_group * n_periods),
+  Individual = rep(rep(1:n_per_group, each = n_periods), times = 3),
+  Time = rep(time, times = 3 * n_per_group),
+  stringsAsFactors = FALSE
+)
+
+data = data %>% group_by(Individual) %>% mutate(Treated = ifelse(Group %in% c("Group 1", "Group 2"), 1, 0),
+                                                Post = case_when(
+                                                  Group== "Group 1" & Time > tp[1] ~ 1,
+                                                  Group== "Group 2" & Time > tp[2] ~ 1,
+                                                  TRUE ~ 0),
+                                                Outcome = rnorm(3 * n_periods, mean = case_when(
+                                                  Post == 1 & Group== "Group 1" ~ -5+0.5*Time+20+0.3*Time,
+                                                  Post == 0 & Group== "Group 1" ~ -5+0.5*Time,
+                                                  Post == 1 & Group== "Group 2" ~ 0.5*Time+10+0.6*Time,
+                                                  Post == 0 & Group== "Group 2" ~ 0.5*Time,
+                                                  TRUE ~ 5+0.5*Time))) %>% distinct() %>%
+  group_by(Individual, Group) %>% mutate(TreatmentPeriod = if(is.na(which(Post>0)[1])){0}else{which(Post>0)[1]})
+
+# Rename individuals to be unique
+data$Individual = rep(1:(n_per_group*3), each = n_periods)
+```
+
+```{r}
+# Plot the simulated data
+ggplot(data, aes(x = Time, y = Outcome, color = Group, linetype = factor(Post))) +
+  geom_point() +
+  labs(x = "Time", y = "Outcome", color = "Group", linetype = "Post") +
+  theme_minimal()
+```
+
+### 3.2.2. Estimation
+
+#### Linear DiD
+
+```{r}
+# Estimate DiD parameters using linear regression
+diD_model <- lm(Outcome ~ Post + Time + Post:Time + Group - 1, data = data)
+
+# Display DiD model summary
+summary(diD_model)
+```
+
+Tout devient plus compliqué !
+
+#### Event study
+
+```{r}
+est_did = feols(Outcome ~ sunab(TreatmentPeriod, Time) | Individual + Time + Group, data)
+iplot(est_did)
+```
+
+```{r}
+summary(est_did, agg = "att")
+```
+
+On voit qu'on capte un ATT qui dépend du temps.
+
+```{r}
+etable(est_did, agg = FALSE)
+```
+
+On voit que l'on ne parvient pas à faire la disction entre l'effet constant et la composante temporelle, même en désagrégeant par période.
+
+# 4. Conclusion pour l'analyse empirique
+
+On va retenir le package fixed effet, avec la modélisation staggered pour faire les estimations dans les données en supposant: - Traitement binaire - Traitement qui peut intervenir à différentes dates
+
+On essayera de: - Valider la parallel trend assumption - Estimer ATT - Décomposer l'effet par groupe par période
