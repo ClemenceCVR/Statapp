@@ -146,8 +146,6 @@ data2$EverTreated <- ifelse(data2$G == 50, 1, ifelse(data2$G == 75, 1, 0))
 
  
 
- 
-
 ```{r}
 
 # generate leads and lags of the treatment
@@ -220,4 +218,110 @@ maregression = lm(y~x, data = df1)
 
 summary(maregression)
 
+```
+
+```{r}
+# dans es on retrouve tous nos coefficients de Dt0, Dt1 etc et ensuite on fait la regression linéaire des coefficients des Dt sur le temps.
+#Normalement nous devrions retrouver 0.5 (c.f manière dont nos données sont simulées) mais ici on trouve 0.22
+
+valeurs_reg_Dt <- as.numeric(coef(es))
+
+
+valeurs_reg_Dt_aprestraitement <- valeurs_reg_Dt[(t0+2):(t1+t0+1)]
+
+df1 = data.frame(y = valeurs_reg_Dt_aprestraitement, x = c(1:t1))
+
+
+maregression = lm(y~x, data = df1)
+
+summary(maregression)
+```
+
+```{r}
+# Plot
+coefs1 <- coef(es)
+ses1 <- sqrt(diag(summary(es)$vcov))
+idx.pre <- 1:t0
+idx.post <- (t0+2):length(coefs1-1)
+coefs <- c(coefs1[idx.pre], 0, coefs1[idx.post])
+ses <- c(ses1[idx.pre], 0, ses1[idx.post])
+exposure <- -t0:t1
+
+cmat <- data.frame(coefs=coefs, ses=ses, exposure=exposure)
+
+ggplot(data = cmat, mapping = aes(y = coefs, x = exposure)) +
+  geom_line(linetype = "dashed") +
+  geom_point() + 
+  geom_errorbar(aes(ymin = (coefs-1.96*ses), ymax = (coefs+1.96*ses)), width = 0.2) +
+  theme_bw()
+```
+
+```{r}
+time.periods2 <- 100
+
+Dtl2 <- sapply(-(time.periods2-50):(time.periods2-75), function(l) {
+    dtl <- 1*( (data2$period == data2$G + l) & (data2$G > 0) )
+    dtl
+})
+Dtl2 <- as.data.frame(Dtl2)
+cnames1 <- paste0("Dtmin", (time.periods2-50):1)
+
+colnames(Dtl2) <- c(cnames1, paste0("Dt", 0:(time.periods2-75)))
+data2 <- cbind.data.frame(data2, Dtl2)
+row.names(data2) <- NULL
+
+head(data2)
+```
+
+
+```{r}
+summary(es)
+```
+
+```{r}
+install.packages("devtools")
+```
+```{r}
+devtools::install_github("bcallaway11/did", force=TRUE)
+```
+
+```{r}
+library(did)
+```
+
+```{r}
+# estimate group-group time average treatment effects
+did_att_gt2 <- att_gt(yname = "Y",
+                     tname = "period",
+                     idname = "id",
+                     gname = "G",
+                     data = data2,
+                     bstrap = TRUE,# set to FALSE for pointwise confidence intervals for group-time average treatment effects
+                     cband = TRUE, 
+                     panel = FALSE) # set to FALSE for pointwise confidence intervals for group-time average treatment effects
+
+summary(did_att_gt2)
+```
+
+Cette fois-ci la // trend est significative au seuil de 1%.
+
+```{r}
+# aggregate them into event study plot
+did_es2 <- aggte(did_att_gt2, type = "dynamic")
+
+# plot the event study
+ggdid(did_es2)
+```
+
+On retrouve la même cassure étrange à 25 et un coefficient de 0.2 au lieu de 0.3.
+
+```{r}
+valeurs_reg_methode3_aprestraitement <- did_att_gt2$att[51:100]
+
+df2 = data.frame(y = valeurs_reg_methode3_aprestraitement, x = c(1:50))
+
+
+maregression2 = lm(y~x, data = df2)
+
+summary(maregression2)
 ```
