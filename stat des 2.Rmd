@@ -728,4 +728,20 @@ plot1 + geom_histogram(data = mean_assets_per_fund_filtered, binwidth = 100000, 
 
 ## 5.1 Profils sectoriels ESG
 
+```{r}
+unique_values <- unique(Covalence_AllData$`GICS industry group`)
+print(unique_values)
+```
+```{r}
+'''
+# Charger la base de données ESG_Funds_Holdings_All
+ESG_data_sector <- ESG_Funds_Holdings_All
+
+# Fusionner les données en utilisant la colonne ISIN comme clé de fusion
+merged_data <- merge(ESG_data_sector, Covalence_AllData, by.x = "isin", by.y = "ISIN", all.x = TRUE)
+
+# Afficher les premières lignes du résultat fusionné
+head(merged_data)
+'''
+```
 
