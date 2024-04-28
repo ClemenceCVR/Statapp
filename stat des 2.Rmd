@@ -1,0 +1,80 @@
+---
+title: "Stat des 2"
+output: html_document
+date: "2024-04-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Charger la bibliothèque
+library(dplyr)
+library(ggplot2)
+```
+```{r}
+dataESGevo <- data.frame(ESG_Funds_Holdings_All)
+```
+
+
+```{r}
+# Convertir la colonne de dates en classe Date
+dataESGevo$date <- as.Date(as.character(dataESGevo$date), format = "%Y%m%d")
+
+# Créer une colonne "année" pour extraire l'année à partir de la colonne de dates
+dataESGevo$année <- format(dataESGevo$date, "%Y")
+
+```
+
+
+```{r}
+
+# Trier les données par fonds, entreprise et date
+dataESGevo <- dataESGevo %>%
+  arrange(fund_Isin, name, date)
+
+# Calculer les différences de quantité pour chaque entreprise dans chaque fonds d'une année à l'autre
+dataESGevo <- dataESGevo %>%
+  group_by(fund_Isin, name) %>%
+  mutate(diff_quantity = quantity - lag(quantity)) %>%
+  ungroup()
+
+# Supprimer les lignes où la différence de quantité est NA (première année pour une entreprise dans un fonds)
+dataESGevo <- dataESGevo[complete.cases(dataESGevo$diff_quantity), ]
+
+# Calculer la somme des valeurs absolues des achats et des ventes pour tous les fonds
+achats_ventes <- dataESGevo %>%
+  group_by(fund_Isin, année) %>%
+  summarize(total_achats_ventes = sum(abs(diff_quantity)), total_actifs = sum(quantity)) %>%
+  ungroup()
+
+# Calculer le taux de rotation pour chaque fonds et chaque année
+taux_rotation <- achats_ventes %>%
+  mutate(taux_rotation = total_achats_ventes / total_actifs)
+
+# Afficher le résultat
+print(taux_rotation)
+
+
+
+```
+```{r}
+# Créer un dataframe avec la moyenne des taux de rotation par année
+moyenne_taux_rotation <- taux_rotation %>%
+  group_by(année) %>%
+  summarize(moyenne_taux_rotation = mean(taux_rotation, na.rm = TRUE))
+
+# Afficher le dataframe résultant
+print(moyenne_taux_rotation)
+
+
+```
+```{r}
+ggplot(moyenne_taux_rotation, aes(x=année, y=moyenne_taux_rotation)) +
+  geom_smooth(method="loess", se=FALSE) + # Ajouter une courbe lissée
+  geom_point() + # Ajouter des points pour chaque observation
+  labs(x = "Année", y = "Taux de rotation moyen", title = "Taux de rotation moyen par année") + # Définir les titres des axes et du graphique
+  theme_minimal() # Utiliser un thème minimal pour le graphique
+```
+
