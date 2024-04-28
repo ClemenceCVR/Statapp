@@ -1,0 +1,110 @@
+```{r}
+library(dplyr)
+library(lubridate)
+
+
+Covalence_final <- select(Covalence_AllData, date, ISIN, CON_fina)
+
+noESG_final  <- select(noESG_Funds_Holdings_All, fund_Isin, weight, date, isin)
+
+library(dplyr)
+
+
+
+noESG_final <- noESG_final %>%
+  arrange(fund_Isin, isin, date) %>%
+  group_by(fund_Isin, isin) %>%
+  mutate(delta_weight = weight - lag(weight))
+
+
+# Votre colonne de dates doit être une chaîne pour cette opération.
+# Si ce n'est pas le cas, convertissez-la d'abord avec as.character().
+
+noESG_final$date <- as.character(noESG_final$date)
+
+# Utilisez substr() pour extraire l'année et le mois, et puis collez-les ensemble avec un tiret.
+noESG_final$date <- paste(substr(noESG_final$date, 1, 4), substr(noESG_final$date, 5, 6), sep="-")
+```
+
+
+```{r}
+merged_final <- merge(noESG_final, Covalence_final, by.x = c("isin", "date"), by.y = c("ISIN", "date"))
+```
+
+
+```{r}
+# on prend le fond : US74440N1028 par exemple 
+
+merged_US74 <- filter(merged_final, fund_Isin == "US74440N1028")
+
+# Installer la bibliothèque lubridate si ce n'est pas déjà fait
+# install.packages("lubridate")
+
+# Charger la bibliothèque lubridate
+# Charger la bibliothèque lubridate
+library(lubridate)
+
+# Assurer que la colonne date est bien au format Date
+merged_US74$date <- ymd(paste0(merged_US74$date, "-01"))
+
+# Créer une fonction pour calculer le nombre de mois écoulés depuis une date de référence (2013-01)
+nb_mois_ecoules <- function(date) {
+  reference <- ymd("2013-01-01")  # Date de référence
+  # Calculer la différence en mois
+  months_diff <- (year(date) - year(reference)) * 12 + (month(date) - month(reference)) 
+  return(months_diff)
+}
+
+# Appliquer la fonction à la colonne de dates et stocker les résultats dans une nouvelle colonne
+merged_US74$nb_mois <- sapply(merged_US74$date, nb_mois_ecoules)
+
+library(dplyr)
+
+
+
+merged_US74 <- merged_US74 %>%
+  group_by(isin) %>%
+  arrange(isin, date) %>%
+  mutate(binary_column = ifelse(CON_fina >= 2 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
+
+
+```
+
+
+```{r}
+# Création des vecteurs pour les colonnes "name" et "score"
+name <- c("Al", "Jen", "Al", "Jen", "Al", "Jane")
+score <- c(100, 80, 60, 100, 80, 60)
+
+# Création du data frame
+df <- data.frame(name = name, score = score)
+
+# Affichage du data frame
+print(df)
+
+df %>%
+  group_by(name) %>%
+  mutate(next.score = dplyr::lead(score, order_by = name),
+```
+
+
+```{r}
+# Chargement de la bibliothèque dplyr
+library(dplyr)
+
+# Création d'un DataFrame simple
+data <- data.frame(
+  values = c(1, 2, 3)
+)
+
+# Utilisation de mutate pour ajouter une colonne avec la valeur précédente
+data <- data %>%
+  mutate(
+    prev_values = dplyr::lag(values)
+  )
+
+# Affichage du DataFrame modifié
+print(data)
+
+```
+
