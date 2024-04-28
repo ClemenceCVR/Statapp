@@ -65,46 +65,25 @@ library(dplyr)
 merged_US74 <- merged_US74 %>%
   group_by(isin) %>%
   arrange(isin, date) %>%
-  mutate(binary_column = ifelse(CON_fina >= 2 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
+  mutate(treated = ifelse(CON_fina > 2 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
 
 
 ```
-
 
 ```{r}
-# Création des vecteurs pour les colonnes "name" et "score"
-name <- c("Al", "Jen", "Al", "Jen", "Al", "Jane")
-score <- c(100, 80, 60, 100, 80, 60)
+# Trier la base de données par entreprise (isin) et par date
+merged_US74 <- merged_US74 %>% arrange(isin, date)
 
-# Création du data frame
-df <- data.frame(name = name, score = score)
-
-# Affichage du data frame
-print(df)
-
-df %>%
-  group_by(name) %>%
-  mutate(next.score = dplyr::lead(score, order_by = name),
-```
-
-
-```{r}
-# Chargement de la bibliothèque dplyr
-library(dplyr)
-
-# Création d'un DataFrame simple
-data <- data.frame(
-  values = c(1, 2, 3)
-)
-
-# Utilisation de mutate pour ajouter une colonne avec la valeur précédente
-data <- data %>%
-  mutate(
-    prev_values = dplyr::lag(values)
-  )
-
-# Affichage du DataFrame modifié
-print(data)
+# Regrouper les données par entreprise (isin)
+merged_US74 <- merged_US74 %>%
+  group_by(isin) %>%
+  # Créer une nouvelle colonne pour indiquer si l'entreprise est traitée à partir de cette date
+mutate(treated = ifelse(cummax(treated) == 1, 1, 0)) %>%
+  ungroup()  
 
 ```
+
+
+
+
 
