@@ -14,7 +14,7 @@ library(dplyr)
 noESG_final <- noESG_final %>%
   arrange(fund_Isin, isin, date) %>%
   group_by(fund_Isin, isin) %>%
-  mutate(delta_weight = weight - lag(weight))
+  mutate(delta_weight = weight - dplyr::lag(weight))
 
 
 # Votre colonne de dates doit être une chaîne pour cette opération.
@@ -31,41 +31,28 @@ noESG_final$date <- paste(substr(noESG_final$date, 1, 4), substr(noESG_final$dat
 merged_final <- merge(noESG_final, Covalence_final, by.x = c("isin", "date"), by.y = c("ISIN", "date"))
 ```
 
+```{r}
+# Assurer que la colonne date est bien au format Date
+merged_final$date <- ymd(paste0(merged_final$date, "-01"))
+# Définir la date de référence une seule fois
+reference_date <- ymd("2013-01-01")
+
+# Calcul vectorisé des mois écoulés depuis la date de référence
+merged_final$nb_mois <- interval(start = reference_date, end = merged_final$date) / months(1)
+
+```
+
 
 ```{r}
-# on prend le fond : US74440N1028 par exemple 
+# on prend le fond : US74440N1028 par exemple
 
 merged_US74 <- filter(merged_final, fund_Isin == "US74440N1028")
-
-# Installer la bibliothèque lubridate si ce n'est pas déjà fait
-# install.packages("lubridate")
-
-# Charger la bibliothèque lubridate
-# Charger la bibliothèque lubridate
-library(lubridate)
-
-# Assurer que la colonne date est bien au format Date
-merged_US74$date <- ymd(paste0(merged_US74$date, "-01"))
-
-# Créer une fonction pour calculer le nombre de mois écoulés depuis une date de référence (2013-01)
-nb_mois_ecoules <- function(date) {
-  reference <- ymd("2013-01-01")  # Date de référence
-  # Calculer la différence en mois
-  months_diff <- (year(date) - year(reference)) * 12 + (month(date) - month(reference)) 
-  return(months_diff)
-}
-
-# Appliquer la fonction à la colonne de dates et stocker les résultats dans une nouvelle colonne
-merged_US74$nb_mois <- sapply(merged_US74$date, nb_mois_ecoules)
-
-library(dplyr)
-
 
 
 merged_US74 <- merged_US74 %>%
   group_by(isin) %>%
   arrange(isin, date) %>%
-  mutate(treated = ifelse(CON_fina > 2 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
+  mutate(Post = ifelse(CON_fina > 2 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
 
 
 ```
@@ -78,10 +65,61 @@ merged_US74 <- merged_US74 %>% arrange(isin, date)
 merged_US74 <- merged_US74 %>%
   group_by(isin) %>%
   # Créer une nouvelle colonne pour indiquer si l'entreprise est traitée à partir de cette date
-mutate(treated = ifelse(cummax(treated) == 1, 1, 0)) %>%
+mutate(Post = ifelse(cummax(Post) == 1, 1, 0)) %>%
   ungroup()  
 
+
+merged_US74 <- merged_US74 %>%
+  rename(Outcome = delta_weight)
+
+
+merged_US74 <- merged_US74 %>%
+  group_by(isin) %>%
+  # Calcul de la période de traitement avec remplacement des NA par 0
+  dplyr::summarise(TreatmentPeriod = ifelse(any(Post == 1), min(nb_mois[Post == 1], na.rm = TRUE), 0)) %>%
+  # Fusion avec le dataframe original
+  dplyr::left_join(merged_US74, by = "isin")
+
+
+merged_US74 <- merged_US74 %>%
+  group_by(isin) %>%
+  mutate(treated = ifelse(any(Post == 1), 1, 0)) %>%
+  ungroup()
+
+merged_US74 <- merged_US74 %>%
+  rename(id = isin)
+
+merged_US74 <- merged_US74 %>%
+  rename(time = nb_mois)
+
+# Créer la colonne Group
+merged_US74 <- merged_US74 %>%
+  mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
 ```
+
+
+```{r}
+# Plot the simulated data
+ggplot(merged_US74, aes(x = time, y = Outcome, color = Group, linetype = factor(Post))) +
+  geom_point() +
+  labs(x = "Time", y = "Outcome", color = "Group", linetype = "Post") +
+  theme_minimal()
+```
+
+```{r}
+# Estimer les paramètres DiD en utilisant une régression linéaire
+diD_model <- lm(Outcome ~ Post + time + Post:time + Group - 1, data = merged_US74)
+
+# Extraire uniquement le coefficient estimé pour 'Post'
+post_coefficient <- coef(diD_model)["Post"]
+
+# Afficher le coefficient pour 'Post'
+cat("Coefficient pour Post: ", post_coefficient, "\n")
+
+
+
+```
+
 
 
 
