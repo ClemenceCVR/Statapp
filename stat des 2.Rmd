@@ -474,8 +474,16 @@ taux_rotation <- achats_ventes %>%
 # Afficher le résultat
 print(taux_rotation)
 
+```
 
+```{r}
+# Créer un dataframe avec la moyenne des taux de rotation par année
+moyenne_taux_rotation <- taux_rotation %>%
+  group_by(année) %>%
+  summarize(moyenne_taux_rotation = mean(taux_rotation, na.rm = TRUE))
 
+# Afficher le dataframe résultant
+print(moyenne_taux_rotation)
 ```
 
 ```{r}
