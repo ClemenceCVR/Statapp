@@ -54,6 +54,18 @@ merged_final <- merged_final %>%
 
 ```
 
+````{r}
+# Création du fond représentatif
+fond_representatif <- aggregate(Outcome ~ time + id + date, data = merged_final, FUN = mean)
+
+Covalence_AllData_subset <- select(Covalence_AllData, date, ISIN, CON_fina)
+Covalence_AllData_subset$date <- ymd(paste0(Covalence_AllData_subset$date, "-01"))
+Covalence_AllData_subset$date <- as.Date(Covalence_AllData_subset$date)
+
+# Utiliser la fonction left_join() de dplyr pour fusionner les dataframes
+fond_representatif <- left_join(fond_representatif, Covalence_AllData_subset, by = c("date", "id" = "ISIN"))
+```
+
 
 ```{r}
 fonction_did <- function(data, merged_US74){
@@ -104,6 +116,7 @@ merged_US74 <- merged_US74 %>%
 
 
 ```
+
 
 ```{r}
 # Trier la base de données par entreprise (id) et par date
