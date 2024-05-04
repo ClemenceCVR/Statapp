@@ -1,0 +1,933 @@
+---
+title: "Stat des 2"
+output: html_document
+date: "2024-04-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Charger la bibliothèqueee
+library(dplyr)
+library(ggplot2)
+library(magrittr)
+library(rlang)
+```
+
+# 1.Répartition des catégories des fonds
+
+## 1.2 Répartition des catégories des fonds ESG
+
+```{r}
+categorie_counts_ESG <- table(ESG_Funds_Holdings_All$category)
+categorie_counts_ESG
+
+categorie_counts_noESG <- table(noESG_Funds_Holdings_All$category)
+categorie_counts_noESG
+```
+
+```{r}
+colors <- c("#1f78b4", "#33a02c", "#e31a1c", "#ff7f00", "#6a3d9a", "#a6cee3", "#b2df8a", "#fb9a99", "#fdbf6f", "#cab2d6")
+
+# Créer le graphique circulaire sans les étiquettes
+pie(categorie_counts_ESG, col = colors, main = "Répartition des catégories des fonds ESG",labels=NA)
+
+# Créer les étiquettes pour la légende avec les pourcentages
+percentages <- round(100 * categorie_counts_ESG / sum(categorie_counts_ESG), 1)
+legend_labels <- paste(names(categorie_counts_ESG), "(", percentages, "%)")
+
+# Ajouter la légende en utilisant legend_labels
+legend("topright", legend = legend_labels, title = "Catégories", 
+       cex = 0.6, fill = colors, inset = c(0.55, 0))
+```
+
+```{r}
+colors <- c("#1f78b4", "#33a02c", "#e31a1c", "#ff7f00", "#6a3d9a", "#a6cee3", "#b2df8a", "#fb9a99", "#fdbf6f", "#cab2d6")
+
+categories_sans_gen <- categorie_counts_ESG[names(categorie_counts_ESG) != "Gen 20-100"]
+
+pie(categories_sans_gen, col = colors, main = "Répartition des catégories des fonds ESG thématiques", labels = NA)
+
+# Créer les étiquettes pour la légende avec les pourcentages
+percentages <- round(100 * categories_sans_gen / sum(categories_sans_gen), 1)
+legend_labels <- paste(names(categories_sans_gen), "(", percentages, "%)")
+
+# Ajouter la légende en utilisant legend_labels
+legend("topright", legend = legend_labels, title = "Catégories", 
+       cex = 0.6, fill = colors, inset = c(0.55, 0))
+
+```
+
+## 1.2 Répartition des catégories des fonds non ESG
+
+```{r}
+
+colors <- c("#aec7e8", "#b2df8a", "#fb9a99")
+
+# Créer le graphique circulaire sans les étiquettes
+pie(categorie_counts_noESG, col = colors, main = "Répartition des catégories des fonds non ESG",labels=NA)
+
+# Créer les étiquettes pour la légende avec les pourcentages
+percentages <- round(100 * categorie_counts_noESG / sum(categorie_counts_noESG), 1)
+legend_labels <- paste(names(categorie_counts_noESG), "(", percentages, "%)")
+
+# Ajouter la légende en utilisant legend_labels
+legend("topright", legend = legend_labels, title = "Catégories", 
+       cex = 0.5, fill = colors, inset = c(0.4, 0))
+```
+
+# 2. Comparaison de l'évolution des encours totaux (ESG/nonESG)
+
+```{r}
+# Calculer les encours totaux pour chaque base de données
+encours_total_ESG <- ESG_Funds_Holdings_All %>%
+  group_by(date) %>%
+  summarize(encours_total_ESG = sum(market_value))
+
+encours_total_noESG <- noESG_Funds_Holdings_All %>%
+  group_by(date) %>%
+  summarize(encours_total_noESG = sum(market_value))
+
+# Fusionner les encours totaux des deux bases de données en une seule dataframe
+encours_combined <- merge(encours_total_ESG, encours_total_noESG, by = "date", all = TRUE)
+
+# Tracer l'évolution des encours totaux combinés sur un seul graphique
+ggplot(encours_combined, aes(x = date)) +
+  geom_line(aes(y = encours_total_ESG, color = "ESG Holdings")) +
+  geom_line(aes(y = encours_total_noESG, color = "No ESG Holdings")) +
+  labs(x = "Date", y = "Encours totaux", title = "Comparaison de l'évolution des encours totaux ESG et non ESG ") +
+  scale_color_manual(values = c("ESG Holdings" = "lightgreen", "No ESG Holdings" = "red")) +
+  theme_minimal()
+```
+
+# 3. Taux de rotation des portefeuilles
+
+## 3.1 Taux de rotation des portefeuilles ESG
+
+```{r}
+data <- data.frame(ESG_Funds_Holdings_All)
+```
+
+```{r}
+
+data <- data[order(data$fund_Isin, data$name, data$date), ]
+```
+
+```{r}
+# Calculer la différence dans la quantité d'actions détenues entre chaque période pour chaque fonds
+data$difference_quantite <- ave(data$quantity, data$fund_Isin, data$name, FUN = function(x) c(NA, diff(x)))
+
+```
+
+```{r}
+# Identifier les achats (quantité positive) et les ventes (quantité négative) pour chaque fonds
+achats <- subset(data, difference_quantite > 0)
+ventes <- subset(data, difference_quantite < 0)
+
+# Calculer la somme des montants absolus des achats et des ventes pour chaque fonds
+valeur_abs_achats <- aggregate(abs(achats$difference_quantite), by = list(achats$fund_Isin), FUN = sum)
+valeur_abs_ventes <- aggregate(abs(ventes$difference_quantite), by = list(ventes$fund_Isin), FUN = sum)
+
+# Afficher les valeurs absolues des achats et des ventes pour chaque fonds
+names(valeur_abs_achats) <- c("fund_Isin", "valeur_abs_achats")
+names(valeur_abs_ventes) <- c("fund_Isin", "valeur_abs_ventes")
+
+print(valeur_abs_achats)
+
+print(valeur_abs_ventes)
+```
+
+```{r}
+# Trouver la plus petite date pour chaque fonds
+min_dates <- tapply(data$date, data$fund_Isin, min)
+
+# Créer un vecteur pour stocker le nombre total de quantités pour chaque fonds à la plus petite date
+total_quantities <- numeric(length(min_dates))
+
+# Parcourir chaque fonds et calculer la somme des quantités à la plus petite date
+for (i in seq_along(min_dates)) {
+  fund <- names(min_dates)[i]
+  min_date <- min_dates[i]
+  total_quantity <- sum(data[data$fund_Isin == fund & data$date == min_date, "quantity"])
+  total_quantities[i] <- total_quantity
+}
+
+# Créer un data frame avec les fonds et la somme des quantités à la plus petite date
+summary_data <- data.frame(fund_Isin = names(min_dates), total_quantity_debut = total_quantities)
+
+```
+
+```{r}
+# Trouver la plus grande date pour chaque fonds
+max_dates <- tapply(data$date, data$fund_Isin, max)
+
+# Créer un vecteur pour stocker le nombre total d'actifs pour chaque fonds à la plus grande date
+total_assets_max_date <- numeric(length(max_dates))
+
+# Parcourir chaque fonds et calculer le nombre d'actifs à la plus grande date
+for (i in seq_along(max_dates)) {
+  fund <- names(max_dates)[i]
+  max_date <- max_dates[i]
+  total_assets <- sum(data[data$fund_Isin == fund & data$date == max_date, "quantity"])
+  total_assets_max_date[i] <- total_assets
+}
+
+# Ajouter la nouvelle colonne au data frame summary_data
+summary_data$total_quantity_fin <- total_assets_max_date
+
+# Afficher le nouveau data frame avec les fonds, la somme des quantités à la plus petite date, 
+# et le nombre d'actifs à la plus grande date
+print(summary_data)
+```
+
+```{r}
+# on calcule la moyenne sur toute la période en faisant (debut + fin)/2
+summary_data$mean_quantity <- (summary_data$total_quantity_debut + summary_data$total_quantity_fin) / 2
+```
+
+```{r}
+data_turnover <- merge(summary_data, valeur_abs_ventes, by = "fund_Isin", all.x = TRUE)
+data_turnover <- merge(data_turnover, valeur_abs_achats, by = "fund_Isin", all.x = TRUE)
+
+```
+
+```{r}
+data_turnover$taux_rotation <- (data_turnover$valeur_abs_ventes + data_turnover$valeur_abs_achats) / data_turnover$mean_quantity
+```
+
+```{r}
+# Afficher le data frame avec la nouvelle colonne taux_rotation
+head(data_turnover)
+```
+
+```{r}
+data_turnover <- data_turnover[complete.cases(data_turnover), ]
+```
+
+```{r}
+data_turnover$taux_rotation <- data_turnover$taux_rotation / 11
+```
+
+```{r}
+mean_turnover <- mean(data_turnover$taux_rotation, na.rm = TRUE)
+
+# Afficher le turnover moyen pour les fonds ESG
+print(mean_turnover)
+
+```
+
+```{r}
+# Charger le package ggplot2 pour la création de graphiques
+library(ggplot2)
+
+# Créer un histogramme des taux de rotation
+ggplot(data_turnover, aes(x = taux_rotation)) +
+  geom_histogram(binwidth = 0.5, fill = "lightgreen", color = "black") +
+  labs(title = "Distribution des taux de rotation", x = "Taux de rotation", y = "Fréquence")
+```
+
+```{r}
+#On s'aperçoit qu'il y a une taux de rotation de 170, et un de 61, qui sont liés à des fonds qui ont énormément grossi, on décide de les enlever du graphique 
+
+# Trier les données par taux de rotation dans l'ordre décroissant
+sorted_data <- data_turnover[order(data_turnover$taux_rotation, decreasing = TRUE), ]
+
+# Exclure les deux valeurs maximales
+data_sans_max <- sorted_data[-(1:2), ]
+
+# Créer un histogramme des taux de rotation sans les deux valeurs maximales
+ggplot(data_sans_max, aes(x = taux_rotation)) +
+  geom_histogram(binwidth = 0.2, fill = "lightgreen", color = "black") +
+  labs(title = "Distribution des taux de rotation sans les deux valeurs maximales", x = "Taux de rotation", y = "Fréquence")
+
+```
+
+## 3.2 Taux de rotation des fonds non ESG
+
+```{r}
+data_nonESG <- data.frame(noESG_Funds_Holdings_All)
+```
+
+```{r}
+data_nonESG <- data_nonESG[order(data_nonESG$fund_Isin, data_nonESG$name, data_nonESG$date), ]
+```
+
+```{r}
+# Calculer la différence dans la quantité d'actions détenues entre chaque période pour chaque fonds
+data_nonESG$difference_quantite <- ave(data_nonESG$quantity, data_nonESG$fund_Isin, data_nonESG$name, FUN = function(x) c(NA, diff(x)))
+
+```
+
+```{r}
+# Identifier les achats (quantité positive) et les ventes (quantité négative) pour chaque fonds
+achats_nonESG <- subset(data_nonESG, difference_quantite > 0)
+ventes_nonESG <- subset(data_nonESG, difference_quantite < 0)
+
+# Calculer la somme des montants absolus des achats et des ventes pour chaque fonds
+valeur_abs_achats_nonESG <- aggregate(abs(achats_nonESG$difference_quantite), by = list(achats_nonESG$fund_Isin), FUN = sum)
+valeur_abs_ventes_nonESG <- aggregate(abs(ventes_nonESG$difference_quantite), by = list(ventes_nonESG$fund_Isin), FUN = sum)
+
+# Afficher les valeurs absolues des achats et des ventes pour chaque fonds
+names(valeur_abs_achats_nonESG) <- c("fund_Isin", "valeur_abs_achats_nonESG")
+names(valeur_abs_ventes_nonESG) <- c("fund_Isin", "valeur_abs_ventes_nonESG")
+
+print(valeur_abs_achats_nonESG)
+
+print(valeur_abs_ventes_nonESG)
+```
+
+```{r}
+# Trouver la plus petite date pour chaque fonds
+min_dates_nonESG <- tapply(data_nonESG$date, data_nonESG$fund_Isin, min)
+
+# Créer un vecteur pour stocker le nombre total de quantités pour chaque fonds à la plus petite date
+total_quantities_nonESG <- numeric(length(min_dates_nonESG))
+
+# Parcourir chaque fonds et calculer la somme des quantités à la plus petite date
+for (i in seq_along(min_dates_nonESG)) {
+  fund_nonESG <- names(min_dates_nonESG)[i]
+  min_date_nonESG <- min_dates_nonESG[i]
+  total_quantity_nonESG <- sum(data_nonESG[data_nonESG$fund_Isin == fund_nonESG & data_nonESG$date == min_date_nonESG, "quantity"])
+  total_quantities_nonESG[i] <- total_quantity_nonESG
+}
+
+# Créer un data frame avec les fonds et la somme des quantités à la plus petite date
+summary_data_nonESG <- data.frame(fund_Isin = names(min_dates_nonESG), total_quantity_debut_nonESG = total_quantities_nonESG)
+
+```
+
+```{r}
+# Trouver la plus grande date pour chaque fonds
+max_dates_nonESG <- tapply(data_nonESG$date, data_nonESG$fund_Isin, max)
+
+# Créer un vecteur pour stocker le nombre total d'actifs pour chaque fonds à la plus grande date
+total_assets_max_date_nonESG <- numeric(length(max_dates_nonESG))
+
+# Parcourir chaque fonds et calculer le nombre d'actifs à la plus grande date
+for (i in seq_along(max_dates_nonESG)) {
+  fund_nonESG <- names(max_dates_nonESG)[i]
+  max_date_nonESG <- max_dates_nonESG[i]
+  total_assets_nonESG <- sum(data_nonESG[data_nonESG$fund_Isin == fund_nonESG & data_nonESG$date == max_date_nonESG, "quantity"])
+  total_assets_max_date_nonESG[i] <- total_assets_nonESG
+}
+
+# Ajouter la nouvelle colonne au data frame summary_data
+summary_data_nonESG$total_quantity_fin_nonESG <- total_assets_max_date_nonESG
+
+# Afficher le nouveau data frame avec les fonds, la somme des quantités à la plus petite date, 
+# et le nombre d'actifs à la plus grande date
+print(summary_data_nonESG)
+```
+
+```{r}
+# on calcule la moyenne sur toute la période en faisant (debut + fin)/2
+summary_data_nonESG$mean_quantity_nonESG <- (summary_data_nonESG$total_quantity_debut_nonESG + summary_data_nonESG$total_quantity_fin_nonESG) / 2
+```
+
+```{r}
+data_turnover_nonESG <- merge(summary_data_nonESG, valeur_abs_ventes_nonESG, by = "fund_Isin", all.x = TRUE)
+data_turnover_nonESG <- merge(data_turnover_nonESG, valeur_abs_achats_nonESG, by = "fund_Isin", all.x = TRUE)
+
+```
+
+```{r}
+data_turnover_nonESG$taux_rotation_nonESG <- (data_turnover_nonESG$valeur_abs_ventes_nonESG + data_turnover_nonESG$valeur_abs_achats_nonESG) / data_turnover_nonESG$mean_quantity_nonESG
+```
+
+```{r}
+# Afficher le data frame avec la nouvelle colonne taux_rotation
+head(data_turnover_nonESG)
+```
+
+```{r}
+data_turnover_nonESG <- data_turnover_nonESG[complete.cases(data_turnover_nonESG), ]
+```
+```{r}
+data_turnover_nonESG$taux_rotation_nonESG<- data_turnover_nonESG$taux_rotation_nonESG / 11
+```
+
+```{r}
+mean_turnover_nonESG <- mean(data_turnover_nonESG$taux_rotation_nonESG, na.rm = TRUE)
+
+# Afficher le turnover moyen pour les fonds ESG
+print(mean_turnover_nonESG)
+
+```
+
+```{r}
+# Charger le package ggplot2 pour la création de graphiques
+library(ggplot2)
+
+# Créer un histogramme des taux de rotation
+ggplot(data_turnover_nonESG, aes(x = taux_rotation_nonESG)) +
+  geom_histogram(binwidth = 0.2, fill = "brown", color = "black") +
+  labs(title = "Distribution des taux de rotation (non ESG)", x = "Taux de rotation", y = "Fréquence")
+```
+
+```{r}
+#On s'aperçoit qu'il y a 4 lignes avec des hauts taux de rotation, on décide de les enlever du graphique 
+
+# Trier les données par taux de rotation dans l'ordre décroissant
+sorted_data_nonESG <- data_turnover_nonESG[order(data_turnover_nonESG$taux_rotation_nonESG, decreasing = TRUE), ]
+
+# Exclure les deux valeurs maximales
+data_sans_max_nonESG <- sorted_data_nonESG[-(1:4), ]
+
+# Créer un histogramme des taux de rotation sans les deux valeurs maximales
+ggplot(data_sans_max_nonESG, aes(x = taux_rotation_nonESG)) +
+  geom_histogram(binwidth = 0.2, fill = "brown", color = "black") +
+  labs(title = "Distribution des taux de rotation sans les valeurs maximales (non ESG)", x = "Taux de rotation", y = "Fréquence")
+
+```
+
+```{r}
+# Charger le package gridExtra
+library(gridExtra)
+
+# Créer un histogramme des taux de rotation sans les deux valeurs maximales
+histogramme_1 <- ggplot(data_sans_max, aes(x = taux_rotation)) +
+  geom_histogram(binwidth = 0.2, fill = "lightgreen", color = "black") +
+  labs(title = "Distribution des taux de rotation ESG", x = "Taux de rotation", y = "Fréquence")
+
+# Créer un histogramme des taux de rotation sans les valeurs maximales (non ESG)
+histogramme_2 <- ggplot(data_sans_max_nonESG, aes(x = taux_rotation_nonESG)) +
+  geom_histogram(binwidth = 0.2, fill = "#8B4513", color = "black") +
+  labs(title = "Distribution des taux de rotation non ESG", x = "Taux de rotation", y = "Fréquence")
+
+# Superposer les deux histogrammes avec grid.arrange
+grid.arrange(histogramme_1, histogramme_2, ncol = 2)
+
+```
+
+```{r}
+# Charger le package ggplot2 pour la création de graphiques
+library(ggplot2)
+
+# Créer un boxplot à partir de la colonne taux_rotation de data_turnover
+boxplotnonESG <- ggplot(data_sans_max_nonESG, aes(y = taux_rotation_nonESG)) +
+  geom_boxplot(fill = "brown", color = "black") +
+  labs(title = "Boxplot des taux de rotation non ESG", y = "Taux de rotation") +
+  theme_minimal()
+
+boxplotESG <- ggplot(data_sans_max, aes(y = taux_rotation)) +
+  geom_boxplot(fill = "lightgreen", color = "black") +
+  labs(title = "Boxplot des taux de rotation ESG", y = "Taux de rotation") +
+  theme_minimal()
+
+ylim <- c(min(min(data_sans_max$taux_rotation), min(data_sans_max_nonESG$taux_rotation_nonESG)),
+          max(max(data_sans_max$taux_rotation), max(data_sans_max_nonESG$taux_rotation_nonESG)))
+
+# Superposer les deux histogrammes avec grid.arrange et spécifier la même plage d'échelle pour les deux
+grid.arrange(boxplotESG + ylim(ylim), boxplotnonESG + ylim(ylim), ncol = 2)
+
+```
+
+On remarque que le turnover est plus élevé dans les fonds non ESG. Une conjoncture pourrait être que les gérants de fonds durables ne vendent pas certaines actions orientées ESG même si leur performance financière décline. 
+
+
+
+## 3.3 Moyenne des taux de rotation par année (ESG)
+
+
+```{r}
+dataESGevo <- data.frame(ESG_Funds_Holdings_All)
+```
+
+
+```{r}
+# Convertir la colonne de dates en classe Date
+dataESGevo$date <- as.Date(as.character(dataESGevo$date), format = "%Y%m%d")
+
+# Créer une colonne "année" pour extraire l'année à partir de la colonne de dates
+dataESGevo$année <- format(dataESGevo$date, "%Y")
+
+```
+
+
+```{r}
+
+# Trier les données par fonds, entreprise et date
+dataESGevo <- dataESGevo %>%
+  arrange(fund_Isin, name, date)
+
+# Calculer les différences de quantité pour chaque entreprise dans chaque fonds d'une année à l'autre
+dataESGevo <- dataESGevo %>%
+  group_by(fund_Isin, name) %>%
+  mutate(diff_quantity = quantity - lag(quantity)) %>%
+  ungroup()
+
+# Supprimer les lignes où la différence de quantité est NA (première année pour une entreprise dans un fonds)
+dataESGevo <- dataESGevo[complete.cases(dataESGevo$diff_quantity), ]
+
+# Calculer la somme des valeurs absolues des achats et des ventes pour tous les fonds
+achats_ventes <- dataESGevo %>%
+  group_by(fund_Isin, année) %>%
+  summarize(total_achats_ventes = sum(abs(diff_quantity)), total_actifs = sum(quantity)) %>%
+  ungroup()
+
+# Calculer le taux de rotation pour chaque fonds et chaque année
+taux_rotation <- achats_ventes %>%
+  mutate(taux_rotation = total_achats_ventes / total_actifs)
+
+# Afficher le résultat
+print(taux_rotation)
+
+```
+
+```{r}
+# Créer un dataframe avec la moyenne des taux de rotation par année
+moyenne_taux_rotation <- taux_rotation %>%
+  group_by(année) %>%
+  summarize(moyenne_taux_rotation = mean(taux_rotation, na.rm = TRUE))
+
+# Afficher le dataframe résultant
+print(moyenne_taux_rotation)
+```
+
+```{r}
+ggplot(moyenne_taux_rotation, aes(x=année, y=moyenne_taux_rotation)) +
+  geom_smooth(method="loess", se=FALSE) + # Ajouter une courbe lissée
+  geom_point() + # Ajouter des points pour chaque observation
+  labs(x = "Année", y = "Taux de rotation moyen", title = "Taux de rotation moyen par année") + # Définir les titres des axes et du graphique
+  theme_minimal() # Utiliser un thème minimal pour le graphique
+```
+  
+
+## 3.4 Moyenne des taux de rotation par année (no ESG)
+
+```{r}
+datanoESGevo <- data.frame(noESG_Funds_Holdings_All)
+```
+
+
+```{r}
+# Convertir la colonne de dates en classe Date
+datanoESGevo$date <- as.Date(as.character(datanoESGevo$date), format = "%Y%m%d")
+
+# Créer une colonne "année" pour extraire l'année à partir de la colonne de dates
+datanoESGevo$année <- format(datanoESGevo$date, "%Y")
+
+```
+
+
+```{r}
+
+# Trier les données par fonds, entreprise et date
+datanoESGevo <- datanoESGevo %>%
+  arrange(fund_Isin, name, date)
+
+# Calculer les différences de quantité pour chaque entreprise dans chaque fonds d'une année à l'autre
+datanoESGevo <- datanoESGevo %>%
+  group_by(fund_Isin, name) %>%
+  mutate(diff_quantity = quantity - lag(quantity)) %>%
+  ungroup()
+
+# Supprimer les lignes où la différence de quantité est NA (première année pour une entreprise dans un fonds)
+datanoESGevo <- datanoESGevo[complete.cases(datanoESGevo$diff_quantity), ]
+
+# Calculer la somme des valeurs absolues des achats et des ventes pour tous les fonds
+achats_ventesnoESG <- datanoESGevo %>%
+  group_by(fund_Isin, année) %>%
+  summarize(total_achats_ventes = sum(abs(diff_quantity)), total_actifs = sum(quantity)) %>%
+  ungroup()
+
+# Calculer le taux de rotation pour chaque fonds et chaque année
+taux_rotationnoESG <- achats_ventesnoESG %>%
+  mutate(taux_rotationnoESG = total_achats_ventes / total_actifs)
+
+# Afficher le résultat
+print(taux_rotationnoESG)
+
+
+
+```
+```{r}
+# Créer un dataframe avec la moyenne des taux de rotation par année
+moyenne_taux_rotationnoESG <- taux_rotationnoESG %>%
+  group_by(année) %>%
+  summarize(moyenne_taux_rotationnoESG = mean(taux_rotationnoESG, na.rm = TRUE))
+
+# Afficher le dataframe résultant
+print(moyenne_taux_rotationnoESG)
+```
+```{r}
+ggplot(moyenne_taux_rotationnoESG, aes(x=année, y=moyenne_taux_rotationnoESG)) +
+  geom_smooth(method="loess", se=FALSE) + # Ajouter une courbe lissée
+  geom_point() + # Ajouter des points pour chaque observation
+  labs(x = "Année", y = "Taux de rotation moyen", title = "Taux de rotation moyen par année") + # Définir les titres des axes et du graphique
+  theme_minimal() # Utiliser un thème minimal pour le graphique
+```
+```{r}
+# Premier graphique
+graphique1 <- ggplot(moyenne_taux_rotationnoESG, aes(x=année, y=moyenne_taux_rotationnoESG)) +
+  geom_smooth(method="loess", se=FALSE) + 
+  geom_point(color = "brown") +  # Couleur des points marron
+  labs(x = "Année", y = "Taux de rotation moyen", title = "Taux de rotation moyen par année") + 
+  theme_minimal()
+
+# Deuxième graphique
+graphique2 <- ggplot(moyenne_taux_rotation, aes(x=année, y=moyenne_taux_rotation)) +
+  geom_smooth(method="loess", se=FALSE) + 
+  geom_point(color = "green") +  # Couleur des points vert
+  labs(x = "Année", y = "Taux de rotation moyen", title = "Taux de rotation moyen par année") + 
+  theme_minimal()
+
+# Superposition des deux graphiques
+graphique_final <- graphique1 + 
+  geom_smooth(data = moyenne_taux_rotation, aes(x=année, y=moyenne_taux_rotation), method="loess", se=FALSE, color="green") +
+  geom_point(data = moyenne_taux_rotation, aes(x=année, y=moyenne_taux_rotation), color="green")
+
+scale_color_manual(values = c("green", "brown"), labels = c("ESG", "No-ESG"))
+
+# Affichage du graphique final
+print(graphique_final)
+
+
+```
+# 4. Nombre moyen d'entreprises par fonds en portefeuille
+
+## 4.1 ESG
+
+
+
+```{r}
+# Convertir les colonnes de date en format date pour les deux bases de données
+ESG_Funds_Holdings_All_copy <- ESG_Funds_Holdings_All
+
+noESG_Funds_Holdings_All_copy <- noESG_Funds_Holdings_All
+
+ESG_Funds_Holdings_All_copy$date <- ymd(ESG_Funds_Holdings_All_copy$date)
+noESG_Funds_Holdings_All_copy$date <- ymd(noESG_Funds_Holdings_All_copy$date)
+
+# Agréger les données pour calculer le nombre moyen d'entreprises différentes par date pour les deux bases de données
+entreprises_par_date_ESG <- ESG_Funds_Holdings_All_copy %>%
+  group_by(date, fund_Isin) %>%
+  summarise(nb_entreprises_differentes = n_distinct(isin)) %>%
+  ungroup() %>%
+  group_by(date) %>%
+  summarise(moyenne_entreprises = mean(nb_entreprises_differentes))
+
+entreprises_par_date_noESG <- noESG_Funds_Holdings_All_copy %>%
+  group_by(date, fund_Isin) %>%
+  summarise(nb_entreprises_differentes = n_distinct(isin)) %>%
+  ungroup() %>%
+  group_by(date) %>%
+  summarise(moyenne_entreprises = mean(nb_entreprises_differentes))
+
+# Créer les graphiques en barres pour chaque base de données
+graphique_ESG <- ggplot(entreprises_par_date_ESG, aes(x = date, y = moyenne_entreprises)) +
+  geom_bar(stat = "identity", fill = "lightgreen") +
+  labs(x = "Date", y = "Nombre moyen d'entreprises", title = "ESG: Nombre moyen d'entreprises dans les fonds par date") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+graphique_noESG <- ggplot(entreprises_par_date_noESG, aes(x = date, y = moyenne_entreprises)) +
+  geom_bar(stat = "identity", fill = "brown") +
+  labs(x = "Date", y = "Nombre moyen d'entreprises", title = "No ESG: Nombre moyen d'entreprises dans les fonds par date") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Superposer les deux graphiques
+gridExtra::grid.arrange(graphique_ESG, graphique_noESG, ncol = 2)
+
+```
+
+
+
+
+
+
+
+
+```{r}
+# Assurez-vous d'avoir chargé les bibliothèques nécessaires
+library(tidyverse)
+library(lubridate)
+
+# Supposons que vos bases de données s'appellent ESG_Funds_Holdings_All et noESG_Funds_Holdings_All
+
+# Convertir les colonnes de date en format date pour les deux bases de données
+
+ESG_Funds_Holdings_All_copy$date <- ymd(ESG_Funds_Holdings_All_copy$date)
+noESG_Funds_Holdings_All_copy$date <- ymd(noESG_Funds_Holdings_All_copy$date)
+
+# Agréger les données pour calculer le nombre moyen d'entreprises différentes par date pour les deux bases de données
+entreprises_par_date_ESG <- ESG_Funds_Holdings_All_copy %>%
+  group_by(date, fund_Isin) %>%
+  summarise(nb_entreprises_differentes = n_distinct(isin)) %>%
+  ungroup() %>%
+  group_by(date) %>%
+  summarise(moyenne_entreprises = mean(nb_entreprises_differentes))
+
+entreprises_par_date_noESG <- noESG_Funds_Holdings_All_copy %>%
+  group_by(date, fund_Isin) %>%
+  summarise(nb_entreprises_differentes = n_distinct(isin)) %>%
+  ungroup() %>%
+  group_by(date) %>%
+  summarise(moyenne_entreprises = mean(nb_entreprises_differentes))
+
+# Fusionner les deux jeux de données
+entreprises_par_date <- bind_rows(
+  mutate(entreprises_par_date_ESG, type = "ESG"),
+  mutate(entreprises_par_date_noESG, type = "No ESG")
+)
+
+ggplot(entreprises_par_date, aes(x = date, y = moyenne_entreprises, fill = type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c(ESG = "lightgreen", `No ESG` = "brown")) +
+  labs(x = "Date", y = "Nombre moyen d'entreprises", title = "Nombre moyen d'entreprises dans les fonds par date") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+```
+
+```{r}
+# Charger les bibliothèques nécessaires
+library(dplyr)
+library(ggplot2)
+
+
+# Utiliser la fonction count de dplyr pour compter les entreprises uniques par fonds
+result <- ESG_Funds_Holdings_All_copy %>%
+  group_by(fund_Isin) %>%
+  summarize(nombre_entreprises_differentes = n_distinct(isin))
+
+# Créer le graphique en barres avec ggplot2
+ggplot(result, aes(x = fund_Isin, y = nombre_entreprises_differentes)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Fonds", y = "Nombre d'entreprises différentes", title = "Distribution du nombre d'entreprises différentes par fonds") +
+  theme_minimal()
+
+```
+```{r}
+
+
+distribution <- ESG_Funds_Holdings_All_copy %>%
+  group_by(fund_Isin) %>%
+  summarize(nombre_entreprises_differentes = n_distinct(isin)) %>%
+  count(nombre_entreprises_differentes)
+
+# Créer le graphique de densité avec ggplot2
+ggplot(distribution, aes(x = nombre_entreprises_differentes)) +
+  geom_density(fill = "skyblue", color = "blue", alpha = 0.5) +
+  labs(x = "Nombre d'entreprises différentes dans un fonds", y = "Densité", title = "Densité de la distribution du nombre d'entreprises différentes par fonds") +
+  theme_minimal()
+
+
+```
+
+```{r}
+df_unique <- ESG_Funds_Holdings_All_copy %>%
+  distinct(isin, .keep_all = TRUE)
+
+# Utiliser la fonction count de dplyr pour compter le nombre de fonds ayant le même nombre d'entreprises différentes
+distribution <- df_unique %>%
+  group_by(fund_Isin) %>%
+  summarize(nombre_entreprises_differentes = n_distinct(isin)) %>%
+  count(nombre_entreprises_differentes)
+
+# Créer le graphique de densité avec ggplot2
+ggplot(distribution, aes(x = nombre_entreprises_differentes)) +
+  geom_density(fill = "skyblue", color = "blue", alpha = 0.5) +
+  labs(x = "Nombre d'entreprises différentes dans un fonds", y = "Densité", title = "Densité de la distribution du nombre d'entreprises différentes par fonds") +
+  theme_minimal()
+
+```
+
+```{r}
+df_unique_no_ESG <- noESG_Funds_Holdings_All_copy %>%
+  distinct(isin, .keep_all = TRUE)
+
+# Utiliser la fonction count de dplyr pour compter le nombre de fonds ayant le même nombre d'entreprises différentes
+distribution_noESG <- df_unique_no_ESG %>%
+  group_by(fund_Isin) %>%
+  summarize(nombre_entreprises_differentes_noESG = n_distinct(isin)) %>%
+  count(nombre_entreprises_differentes_noESG)
+
+# Créer le graphique de densité avec ggplot2
+ggplot(distribution_noESG, aes(x = nombre_entreprises_differentes_noESG)) +
+  geom_density(fill = "skyblue", color = "blue", alpha = 0.5) +
+  labs(x = "Nombre d'entreprises différentes dans un fonds", y = "Densité", title = "Densité de la distribution du nombre d'entreprises différentes par fonds") +
+  theme_minimal()
+```
+
+```{r}
+# Renommer la colonne dans distribution_noESG pour la rendre cohérente avec distribution
+distribution_noESG <- distribution_noESG %>%
+  rename(nombre_entreprises_differentes = nombre_entreprises_differentes_noESG)
+
+```
+```{r}
+
+# Combiner les deux dataframes en un seul
+combined_distribution <- rbind(distribution, distribution_noESG)
+
+# Créer le graphique de densité avec ggplot2 en superposant les distributions
+ggplot(combined_distribution, aes(x = nombre_entreprises_differentes, fill = Type)) +
+  geom_density(alpha = 0.5, color = "black") +
+  scale_fill_manual(values = c("lightgreen", "brown")) +  # Changer les couleurs de remplissage
+  labs(x = "Nombre d'entreprises différentes dans un fonds", y = "Densité", title = "Densité de la distribution du nombre d'entreprises différentes par fonds") +
+  theme_minimal()
+
+```
+
+
+
+```{r}
+ESG_Funds_Holdings_All_actifs <- ESG_Funds_Holdings_All
+```
+
+```{r}
+# Calculer la moyenne du nombre d'actifs par année et par fonds
+mean_assets_per_year_per_fund <- ESG_Funds_Holdings_All_actifs %>%
+  group_by(fund_Isin, year = lubridate::year(date)) %>%
+  summarise(mean_assets = mean(quantity))
+
+# Calculer la moyenne du nombre d'actifs par fonds sur toutes les années
+mean_assets_per_fund <- mean_assets_per_year_per_fund %>%
+  group_by(fund_Isin) %>%
+  summarise(mean_assets = mean(mean_assets))
+
+# Afficher la distribution avec un histogramme et une courbe lissée
+ggplot(mean_assets_per_fund, aes(x = mean_assets)) +
+  geom_histogram(binwidth = 1000000, fill = "lightgreen", color = "black", aes(y = ..density..)) +
+  geom_density(alpha = 0.4, fill = "yellow") +
+  labs(title = "Distribution du nombre moyen d'actifs en portefeuille par fonds (ESG)",
+       x = "Nombre moyen d'actifs",
+       y = "Fréquence")
+
+```
+
+
+```{r}
+
+# Calculer la moyenne du nombre d'actifs par année et par fonds
+mean_assets_per_year_per_fund <- ESG_Funds_Holdings_All_actifs %>%
+  group_by(fund_Isin, year = lubridate::year(date)) %>%
+  summarise(mean_assets = mean(quantity))
+
+# Calculer la moyenne du nombre d'actifs par fonds sur toutes les années
+mean_assets_per_fund <- mean_assets_per_year_per_fund %>%
+  group_by(fund_Isin) %>%
+  summarise(mean_assets = mean(mean_assets))
+
+# Définir les quantiles pour exclure les valeurs extrêmes (par exemple, 2.5 % et 97.5 %)
+lower_quantile <- 0.025
+upper_quantile <- 0.975
+
+# Calculer les quantiles du nombre moyen d'actifs par fonds
+quantiles <- quantile(mean_assets_per_fund$mean_assets, c(lower_quantile, upper_quantile))
+
+# Filtrer les données pour exclure les valeurs extrêmes
+mean_assets_per_fund_filtered <- mean_assets_per_fund %>%
+  filter(mean_assets >= quantiles[1] & mean_assets <= quantiles[2])
+
+# Afficher la distribution filtrée avec un histogramme et une courbe lissée
+ggplot(mean_assets_per_fund_filtered, aes(x = mean_assets)) +
+  geom_histogram(binwidth = 100000, fill = "lightgreen", color = "black", aes(y = ..density..)) +
+  geom_density(alpha = 0.4, fill = "yellow") +
+  labs(title = "Distribution du nombre moyen d'actifs en portefeuille par fonds (sans valeurs extrêmes)",
+       x = "Nombre moyen d'actifs",
+       y = "Fréquence")
+
+
+```
+## 4.2 Non ESG
+
+```{r}
+noESG_Funds_Holdings_All_actifs <- noESG_Funds_Holdings_All
+```
+
+```{r}
+# Calculer la moyenne du nombre d'actifs par année et par fonds
+mean_assets_per_year_per_fund_noESG <- noESG_Funds_Holdings_All_actifs %>%
+  group_by(fund_Isin, year = lubridate::year(date)) %>%
+  summarise(mean_assets = mean(quantity))
+
+# Calculer la moyenne du nombre d'actifs par fonds sur toutes les années
+mean_assets_per_fund_noESG <- mean_assets_per_year_per_fund_noESG %>%
+  group_by(fund_Isin) %>%
+  summarise(mean_assets = mean(mean_assets))
+
+# Afficher la distribution avec un histogramme et une courbe lissée
+ggplot(mean_assets_per_fund_noESG, aes(x = mean_assets)) +
+  geom_histogram(binwidth = 1000000, fill = "brown", color = "black", aes(y = ..density..)) +
+  geom_density(alpha = 0.4, fill = "yellow") +
+  labs(title = "Distribution du nombre moyen d'actifs en portefeuille par fonds (noESG)",
+       x = "Nombre moyen d'actifs",
+       y = "Fréquence")
+
+
+```
+
+
+```{r}
+
+# Calculer la moyenne du nombre d'actifs par année et par fonds
+mean_assets_per_year_per_fund_noESG <- noESG_Funds_Holdings_All_actifs %>%
+  group_by(fund_Isin, year = lubridate::year(date)) %>%
+  summarise(mean_assets = mean(quantity))
+
+# Calculer la moyenne du nombre d'actifs par fonds sur toutes les années
+mean_assets_per_fund_noESG <- mean_assets_per_year_per_fund_noESG %>%
+  group_by(fund_Isin) %>%
+  summarise(mean_assets = mean(mean_assets))
+
+# Définir les quantiles pour exclure les valeurs extrêmes (par exemple, 2.5 % et 97.5 %)
+lower_quantile <- 0.025
+upper_quantile <- 0.975
+
+# Calculer les quantiles du nombre moyen d'actifs par fonds
+quantiles <- quantile(mean_assets_per_fund_noESG$mean_assets, c(lower_quantile, upper_quantile))
+
+# Filtrer les données pour exclure les valeurs extrêmes
+mean_assets_per_fund_filtered_noESG <- mean_assets_per_fund_noESG %>%
+  filter(mean_assets >= quantiles[1] & mean_assets <= quantiles[2])
+
+
+# Afficher la distribution filtrée avec un histogramme et une courbe lissée
+ggplot(mean_assets_per_fund_filtered_noESG, aes(x = mean_assets)) +
+  geom_histogram(binwidth = 100000, fill = "brown", color = "black", aes(y = ..density..)) +
+  geom_density(alpha = 0.5, fill = "yellow") +
+  labs(title = "Distribution du nombre moyen d'actifs en portefeuille par fonds (sans valeurs extrêmes, no ESG)",
+       x = "Nombre moyen d'actifs",
+       y = "Fréquence")
+```
+```{r}
+# Premier ensemble de données
+plot1 <- ggplot(mean_assets_per_fund_filtered_noESG, aes(x = mean_assets)) +
+  geom_histogram(binwidth = 100000, fill = "brown", color = "black", aes(y = ..density..)) +
+  geom_density(alpha = 0.5, fill = "brown") +
+  labs(title = "Distribution du nombre moyen d'actifs en portefeuille par fonds (sans valeurs extrêmes, no ESG)",
+       x = "Nombre moyen d'actifs",
+       y = "Fréquence")
+
+# Deuxième ensemble de données
+plot2 <- ggplot(mean_assets_per_fund_filtered, aes(x = mean_assets)) +
+  geom_histogram(binwidth = 100000, fill = "lightgreen", color = "black", aes(y = ..density..)) +
+  geom_density(alpha = 0.4, fill = "green") +
+  labs(title = "Distribution du nombre moyen d'actifs en portefeuille par fonds (sans valeurs extrêmes)",
+       x = "Nombre moyen d'actifs",
+       y = "Fréquence")
+
+# Superposition des graphiques
+plot1 + geom_histogram(data = mean_assets_per_fund_filtered, binwidth = 100000, fill = "lightgreen", color = "black", aes(y = ..density..)) +
+  geom_density(data = mean_assets_per_fund_filtered, alpha = 0.4, fill = "green") +
+  theme(legend.position = "none")  # Pour éviter la duplication de la légende
+
+```
+# 5. Profils sectoriels des portefeuilles ESG vs Traditionnels
+
+## 5.1 Profils sectoriels ESG
+
+```{r}
+unique_values <- unique(Covalence_AllData$`GICS industry group`)
+print(unique_values)
+```
+
+
