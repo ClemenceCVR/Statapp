@@ -76,9 +76,7 @@ fond_representatif <- fond_representatif %>%
   arrange(id, date) %>%
   mutate(Post = ifelse(CON_fina > 10 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
 
-
 ```
-
 
 ```{r}
 # Trier la base de données par entreprise (id) et par date
@@ -241,8 +239,144 @@ iplot(est_did)
 
 ```
 
+```{r}
+ESG_final  <- select(ESG_Funds_Holdings_All_1_, fund_Isin, weight, date, isin)
+```
+
+```{r}
+#On arrange les dates
+ESG_final <- ESG_final %>%
+  arrange(fund_Isin, isin, date) %>%
+  group_by(fund_Isin, isin) %>%
+  mutate(delta_weight = weight - dplyr::lag(weight))
+
+ESG_final$date <- as.character(ESG_final$date)
+
+ESG_final$date <- paste(substr(ESG_final$date, 1, 4), substr(ESG_final$date, 5, 6), sep="-")
+```
 
 
+```{r}
+merged_final_ESG <- merge(ESG_final, Covalence_final, by.x = c("isin", "date"), by.y = c("ISIN", "date"))
+```
+
+```{r}
+# Assurer que la colonne date est bien au format Date
+merged_final_ESG$date <- ymd(paste0(merged_final_ESG$date, "-01"))
+# Définir la date de référence une seule fois
+reference_date <- ymd("2013-01-01")
+
+# Calcul vectorisé des mois écoulés depuis la date de référence
+merged_final_ESG$nb_mois <- interval(start = reference_date, end = merged_final_ESG$date) / months(1)
+
+```
+
+```{r}
+merged_final_ESG <- merged_final_ESG %>%
+  rename(Outcome = delta_weight)
+```
+
+
+```{r}
+merged_final_ESG <- merged_final_ESG %>%
+  rename(id = isin)
+
+merged_final_ESG <- merged_final_ESG %>%
+  rename(time = nb_mois)
+
+```
+
+````{r}
+# Création du fond représentatif
+fond_representatif_ESG <- aggregate(Outcome ~ time + id + date, data = merged_final_ESG, FUN = mean)
+
+Covalence_AllData_subset <- select(Covalence_AllData, date, ISIN, CON_fina)
+Covalence_AllData_subset$date <- ymd(paste0(Covalence_AllData_subset$date, "-01"))
+Covalence_AllData_subset$date <- as.Date(Covalence_AllData_subset$date)
+
+# Utiliser la fonction left_join() de dplyr pour fusionner les dataframes
+fond_representatif_ESG <- left_join(fond_representatif_ESG, Covalence_AllData_subset, by = c("date", "id" = "ISIN"))
+```
+
+```{r}
+
+fond_representatif_ESG <- fond_representatif_ESG %>%
+  group_by(id) %>%
+  arrange(id, date) %>%
+  mutate(Post = ifelse(CON_fina > 10 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
+
+```
+
+```{r}
+# Trier la base de données par entreprise (id) et par date
+fond_representatif_ESG <- fond_representatif_ESG %>% arrange(id, date)
+
+# Regrouper les données par entreprise (id)
+fond_representatif_ESG <- fond_representatif_ESG %>%
+  group_by(id) %>%
+  # Créer une nouvelle colonne pour indiquer si l'entreprise est traitée à partir de cette date
+mutate(Post = ifelse(cummax(Post) == 1, 1, 0)) %>%
+  ungroup()  
+
+
+fond_representatif_ESG <- fond_representatif_ESG %>%
+  group_by(id) %>%
+  # Calcul de la période de traitement avec remplacement des NA par 0
+  dplyr::summarise(TreatmentPeriod = ifelse(any(Post == 1), min(time[Post == 1], na.rm = TRUE), 0)) %>%
+  # Fusion avec le dataframe original
+  dplyr::left_join(fond_representatif_ESG, by = "id")
+
+
+fond_representatif_ESG <- fond_representatif_ESG %>%
+  group_by(id) %>%
+  mutate(treated = ifelse(any(Post == 1), 1, 0)) %>%
+  ungroup()
+
+
+# Créer la colonne Group
+fond_representatif_ESG <- fond_representatif_ESG %>%
+  mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
+```
+
+
+```{r}
+fond_representatif_filtré_ESG <- fond_representatif_ESG %>%
+  filter((time >= TreatmentPeriod - 5 & time <= TreatmentPeriod + 5) | TreatmentPeriod == 0)
+
+# Afficher les premières lignes du data.frame filtré
+head(fond_representatif_filtré_ESG)
+
+```
+
+
+```{r}
+# Plot the simulated data
+ggplot2::ggplot(fond_representatif_filtré_ESG, ggplot2::aes(x = time, y = Outcome, color = Group, linetype = factor(Post))) +
+  ggplot2::geom_point() +
+  ggplot2::labs(x = "Time", y = "Outcome", color = "Group", linetype = "Post") +
+  ggplot2::theme_minimal()
+```
+
+```{r}
+# Estimer les paramètres DiD en utilisant une régression linéaire
+diD_model <- lm(Outcome ~ Post + time + Post:time + Group - 1, data = fond_representatif_filtré_ESG)
+
+# Extraire uniquement le coefficient estimé pour 'Post'
+post_coefficient <- coef(diD_model)["Post"]
+
+# Afficher le coefficient pour 'Post'
+cat("Coefficient pour Post: ", post_coefficient, "\n")
+
+```
+
+
+```{r}
+fond_representatif_filtré_ESG = fond_representatif_filtré_ESG %>% mutate(Time2Treatment = ifelse(treated==1, time-TreatmentPeriod, -1000))
+est_did = feols(Outcome ~ i(Time2Treatment, ref = c(-1, -1000)) | id + time + Group, fond_representatif_filtré_ESG)
+
+iplot(est_did)
+
+```
 
 
 
