@@ -423,6 +423,89 @@ cat("Coefficient pour Post: ", post_coefficient, "\n")
 ```
 
 
+```{r}
+Poids_Fonds_ESG <- ESG_Funds_Holdings_All_1_ %>%
+  group_by(fund_Isin, date) %>%
+  mutate(poids = market_value / weight) %>%
+  slice(1) %>%  # Garder seulement la première ligne de chaque groupe
+  select(fund_Isin, date, poids) %>%
+  distinct()  # Retirer les éventuelles lignes en double
+```
+```{r}
+Poids_Fonds_ESG$date <- as.character(Poids_Fonds_ESG$date)
+
+# Extraire les parties de la date
+year <- substr(Poids_Fonds_ESG$date, 1, 4)  # Les 4 premiers caractères pour l'année
+month <- substr(Poids_Fonds_ESG$date, 5, 6)  # Les 2 caractères suivants pour le mois
+
+# Recréer la date au format "aaaa-mm-01" et remplacer la colonne d'origine
+Poids_Fonds_ESG$date <- paste(year, month, "01", sep = "-")
+
+# Convertir la nouvelle colonne de dates en classe Date si nécessaire
+Poids_Fonds_ESG$date <- as.Date(Poids_Fonds_ESG$date)
+```
+
+```{r}
+merged_with_weights <- merge(merged_final_ESG, Poids_Fonds_ESG, by = c("date", "fund_Isin"))
+
+# Calculer les produits entre Outcome et poids
+merged_with_weights$product <- merged_with_weights$Outcome * merged_with_weights$poids
+
+weighted_sum <- aggregate(cbind(sum_product = product, sum_weight = poids) ~ date + id, data = merged_with_weights, FUN = sum)
+
+# Calculer la moyenne pondérée
+weighted_average <- weighted_sum$sum_product / weighted_sum$sum_weight
+
+# Créer le nouveau dataframe 'fond_representatif_pondere'
+fr_pondere_ESG <- data.frame(date = weighted_sum$date, id = weighted_sum$id, Outcome = weighted_average)
+```
+```{r}
+# Définir la date de référence une seule fois
+reference_date <- ymd("2013-01-01")
+
+# Calcul vectorisé des mois écoulés depuis la date de référence
+fr_pondere_ESG$time <- interval(start = reference_date, end = fr_pondere_ESG$date) / months(1)
+```
+
+
+
+```{r}
+Poids_Fonds_noESG <- noESG_Funds_Holdings_All %>%
+  group_by(fund_Isin, date) %>%
+  mutate(poids = market_value / weight) %>%
+  slice(1) %>%  # Garder seulement la première ligne de chaque groupe
+  select(fund_Isin, date, poids) %>%
+  distinct()  # Retirer les éventuelles lignes en double
+Poids_Fonds_noESG$date <- as.character(Poids_Fonds_noESG$date)
+
+# Extraire les parties de la date
+year <- substr(Poids_Fonds_noESG$date, 1, 4)  # Les 4 premiers caractères pour l'année
+month <- substr(Poids_Fonds_noESG$date, 5, 6)  # Les 2 caractères suivants pour le mois
+
+# Recréer la date au format "aaaa-mm-01" et remplacer la colonne d'origine
+Poids_Fonds_noESG$date <- paste(year, month, "01", sep = "-")
+
+# Convertir la nouvelle colonne de dates en classe Date si nécessaire
+Poids_Fonds_noESG$date <- as.Date(Poids_Fonds_noESG$date)
+```
+
+```{r}
+merged_with_weights <- merge(merged_final, Poids_Fonds_noESG, by = c("date", "fund_Isin"))
+
+# Calculer les produits entre Outcome et poids
+merged_with_weights$product <- merged_with_weights$Outcome * merged_with_weights$poids
+
+weighted_sum <- aggregate(cbind(sum_product = product, sum_weight = poids) ~ date + id, data = merged_with_weights, FUN = sum)
+
+# Calculer la moyenne pondérée
+weighted_average <- weighted_sum$sum_product / weighted_sum$sum_weight
+
+# Créer le nouveau dataframe 'fond_representatif_pondere'
+fr_pondere_noESG <- data.frame(date = weighted_sum$date, id = weighted_sum$id, Outcome = weighted_average)
+```
+```{r}
+fr_pondere_noESG$time <- interval(start = reference_date, end = fr_pondere_noESG$date) / months(1)
+```
 
 
 
