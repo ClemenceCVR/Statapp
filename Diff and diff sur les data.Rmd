@@ -378,6 +378,50 @@ iplot(est_did)
 
 ```
 
+```{r}
+MarketData_All_Firms_in_ESG_Funds <- merge(MarketData_All_Firms_in_ESG_Funds, All_Unique_Companies, by=c("ticker"))
+```
+```{r}
+MarketData_All_Firms_in_noESG_Funds <- merge(MarketData_All_Firms_in_noESG_Funds, All_Unique_Companies, by=c("ticker"))
+```
+
+```{r}
+MarketData_All_Firms_in_ESG_Funds$date <- as.Date(as.character(MarketData_All_Firms_in_ESG_Funds$date), format="%Y%m%d")
+
+MarketData_All_Firms_in_ESG_Funds$date <- format(MarketData_All_Firms_in_ESG_Funds$date, "%Y-%m-01")
+```
+
+```{r}
+MarketData_All_Firms_in_noESG_Funds$date <- as.Date(as.character(MarketData_All_Firms_in_noESG_Funds$date), format="%Y%m%d")
+
+MarketData_All_Firms_in_noESG_Funds$date <- format(MarketData_All_Firms_in_noESG_Funds$date, "%Y-%m-01")
+```
+
+```{r}
+Market_ESG_cut  <- select(MarketData_All_Firms_in_ESG_Funds, date, isin, FE_VALUATION_PE_MEAN, P_PRICE, FREF_MARKET_VALUE_COMPANY)
+```
+```{r}
+Market_noESG_cut  <- select(MarketData_All_Firms_in_noESG_Funds, date, isin, FE_VALUATION_PE_MEAN, P_PRICE, FREF_MARKET_VALUE_COMPANY )
+```
+
+```{r}
+fr_cov_ESG <- merge(fond_representatif_filtré_ESG, Market_ESG_cut, by.x = c("id", "date"), by.y = c("isin", "date"))
+```
+```{r}
+fr_cov_noESG <- merge(fond_representatif_filtré, Market_noESG_cut, by.x = c("id", "date"), by.y = c("isin", "date"))
+```
+
+```{r}
+# Estimer les paramètres DiD en utilisant une régression linéaire
+diD_model <- lm(Outcome ~ Post + P_PRICE + FE_VALUATION_PE_MEAN + FREF_MARKET_VALUE_COMPANY + time + Post:time + Group - 1, data = fr_cov_noESG)
+
+# Extraire uniquement le coefficient estimé pour 'Post'
+post_coefficient <- coef(diD_model)["Post"]
+
+# Afficher le coefficient pour 'Post'
+cat("Coefficient pour Post: ", post_coefficient, "\n")
+```
+
 
 
 
