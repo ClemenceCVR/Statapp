@@ -67,40 +67,92 @@ fond_representatif <- left_join(fond_representatif, Covalence_AllData_subset, by
 ```
 
 
+
+
 ```{r}
-fonction_did <- function(data, merged_US74){
-  # Assurer que 'date' et 'id' sont dans l'ordre attendu et calculer 'Post'
-  data <- data %>%
-    group_by(id) %>%
-    arrange(id, date) %>%
-    mutate(Post = ifelse(CON_fina > 2 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
-  
-  # Calculer cummax de 'Post' pour identifier si Post a jamais été 1 auparavant
-  data <- data %>%
-    mutate(Post = ifelse(cummax(Post) == 1, 1, 0)) 
 
-  # Calculer 'TreatmentPeriod' et éviter de perdre les autres colonnes
-  data <- data %>%
-    mutate(TreatmentPeriod = ifelse(any(Post == 1), min(time[Post == 1], na.rm = TRUE), 0))
-  
-  # Ajouter 'Group' en utilisant 'TreatmentPeriod'
-  data <- data %>%
-    mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
-  
-  # Modélisation linéaire
-  diD_model <- lm(Outcome ~ Post + time + Post:time + Group - 1, data = data)
-  
-  # Extraire le coefficient de 'Post'
-  post_coefficient <- coef(diD_model)["Post"]
-  
-  return(post_coefficient)
-}
+fond_representatif <- fond_representatif %>%
+  group_by(id) %>%
+  arrange(id, date) %>%
+  mutate(Post = ifelse(CON_fina > 10 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
 
-# Application de la fonction sur les données groupées par 'fund_Isin'
-result <- merged_final %>%
-  group_by(fund_Isin) %>%
-  summarize(result = fonction_did(.))
+
 ```
+
+
+```{r}
+# Trier la base de données par entreprise (id) et par date
+fond_representatif <- fond_representatif %>% arrange(id, date)
+
+# Regrouper les données par entreprise (id)
+fond_representatif <- fond_representatif %>%
+  group_by(id) %>%
+  # Créer une nouvelle colonne pour indiquer si l'entreprise est traitée à partir de cette date
+mutate(Post = ifelse(cummax(Post) == 1, 1, 0)) %>%
+  ungroup()  
+
+
+fond_representatif <- fond_representatif %>%
+  group_by(id) %>%
+  # Calcul de la période de traitement avec remplacement des NA par 0
+  dplyr::summarise(TreatmentPeriod = ifelse(any(Post == 1), min(time[Post == 1], na.rm = TRUE), 0)) %>%
+  # Fusion avec le dataframe original
+  dplyr::left_join(fond_representatif, by = "id")
+
+
+fond_representatif <- fond_representatif %>%
+  group_by(id) %>%
+  mutate(treated = ifelse(any(Post == 1), 1, 0)) %>%
+  ungroup()
+
+
+# Créer la colonne Group
+fond_representatif <- fond_representatif %>%
+  mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
+```
+
+
+```{r}
+fond_representatif_filtré <- fond_representatif %>%
+  filter((time >= TreatmentPeriod - 5 & time <= TreatmentPeriod + 5) | TreatmentPeriod == 0)
+
+# Afficher les premières lignes du data.frame filtré
+head(fond_representatif_filtré)
+
+```
+
+
+```{r}
+# Plot the simulated data
+ggplot2::ggplot(fond_representatif_filtré, ggplot2::aes(x = time, y = Outcome, color = Group, linetype = factor(Post))) +
+  ggplot2::geom_point() +
+  ggplot2::labs(x = "Time", y = "Outcome", color = "Group", linetype = "Post") +
+  ggplot2::theme_minimal()
+```
+
+```{r}
+# Estimer les paramètres DiD en utilisant une régression linéaire
+diD_model <- lm(Outcome ~ Post + time + Post:time + Group - 1, data = fond_representatif_filtré)
+
+# Extraire uniquement le coefficient estimé pour 'Post'
+post_coefficient <- coef(diD_model)["Post"]
+
+# Afficher le coefficient pour 'Post'
+cat("Coefficient pour Post: ", post_coefficient, "\n")
+
+
+
+```
+
+
+```{r}
+fond_representatif_filtré = fond_representatif_filtré %>% mutate(Time2Treatment = ifelse(treated==1, time-TreatmentPeriod, -1000))
+est_did = feols(Outcome ~ i(Time2Treatment, ref = c(-1, -1000)) | id + time + Group, fond_representatif_filtré)
+
+iplot(est_did)
+
+```
+
 
 
 ```{r}
@@ -172,13 +224,26 @@ cat("Coefficient pour Post: ", post_coefficient, "\n")
 
 ```
 
+```{r}
+merged_US74_filtré <- merged_US74 %>%
+  filter((time >= TreatmentPeriod - 5 & time <= TreatmentPeriod + 5) | TreatmentPeriod == 0)
+
+# Afficher les premières lignes du data.frame filtré
+head(merged_US74_filtré)
+
+```
 
 ```{r}
-merged_US74 = merged_US74 %>% mutate(Time2Treatment = ifelse(treated==1, time-TreatmentPeriod, -1000))
-est_did = feols(Outcome ~ i(Time2Treatment, ref = c(-1, -1000)) | id + time + Group, merged_US74)
+merged_US74_filtré = merged_US74_filtré %>% mutate(Time2Treatment = ifelse(treated==1, time-TreatmentPeriod, -1000))
+est_did = feols(Outcome ~ i(Time2Treatment, ref = c(-1, -1000)) | id + time + Group, merged_US74_filtré)
 
 iplot(est_did)
+
 ```
+
+
+
+
 
 
 
