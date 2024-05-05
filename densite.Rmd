@@ -1,0 +1,46 @@
+
+
+
+
+```{r}
+ESG_Funds_Holdings_All_copy <- ESG_Funds_Holdings_All
+noESG_Funds_Holdings_All_copy <- noESG_Funds_Holdings_All
+```
+
+
+```{r}
+df_unique <- ESG_Funds_Holdings_All_copy %>%
+  distinct(isin, .keep_all = TRUE)
+
+# Utiliser la fonction count de dplyr pour compter le nombre de fonds ayant le même nombre d'entreprises différentes
+distribution <- df_unique %>%
+  group_by(fund_Isin) %>%
+  summarize(nombre_entreprises_differentes = n_distinct(isin)) %>%
+  count(nombre_entreprises_differentes)
+
+df_unique_no_ESG <- noESG_Funds_Holdings_All_copy %>%
+  distinct(isin, .keep_all = TRUE)
+
+# Utiliser la fonction count de dplyr pour compter le nombre de fonds ayant le même nombre d'entreprises différentes
+distribution_noESG <- df_unique_no_ESG %>%
+  group_by(fund_Isin) %>%
+  summarize(nombre_entreprises_differentes_noESG = n_distinct(isin)) %>%
+  count(nombre_entreprises_differentes_noESG)
+
+distribution$dataset <- "ESG"
+distribution_noESG$dataset <- "No ESG"
+
+# Renommer la colonne de distribution_noESG pour qu'elle corresponde à celle de distribution
+names(distribution_noESG)[names(distribution_noESG) == "nombre_entreprises_differentes_noESG"] <- "nombre_entreprises_differentes"
+
+# Fusionner les deux distributions en une seule
+combined_distribution <- rbind(distribution, distribution_noESG)
+
+# Créer le graphique de densité avec ggplot2
+ggplot(combined_distribution, aes(x = nombre_entreprises_differentes, fill = dataset)) +
+  geom_density(alpha = 0.5) +
+  scale_fill_manual(values = c("ESG" = "green", "No ESG" = "brown")) +  # Définir les couleurs manuellement
+  labs(x = "Nombre d'entreprises différentes dans un fonds", y = "Densité", title = "Densité de la distribution du nombre d'entreprises différentes par fonds", fill = "Type de fonds") +
+  theme_minimal()
+
+```
