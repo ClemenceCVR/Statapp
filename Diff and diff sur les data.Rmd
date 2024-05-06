@@ -476,10 +476,9 @@ fr_pondere_noESG  <- data.frame(
   category = weighted_sum$category.y,  # Assurez-vous d'ajouter la colonne category ici
   Outcome = weighted_average)
 ```
-```
-
 
 ```{r}
+
 fr_pondere_noESG$time <- interval(start = reference_date, end = fr_pondere_noESG$date) / months(1)
 ```
 

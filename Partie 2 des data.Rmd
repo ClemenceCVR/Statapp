@@ -1,5 +1,6 @@
 ```{r}
 merged_with_weights <- subset(merged_with_weights, select = -category.y
+                              
                          )
 
 ```
@@ -50,7 +51,7 @@ fr_pondere_ESG <- fr_pondere_ESG %>%
 
 ```{r}
 # Estimer les paramètres DiD en utilisant une régression linéaire
-diD_model <- lm(Outcome ~ Post + time + Post:time + Group - 1, data = fr_pondere_ESG)
+diD_model <- lm(Outcome ~ Post + time + Post:time + Group + category- 1, data = fr_pondere_ESG)
 
 # Extraire uniquement le coefficient estimé pour 'Post'
 post_coefficient <- coef(diD_model)["Post"]
@@ -59,6 +60,10 @@ post_coefficient <- coef(diD_model)["Post"]
 cat("Coefficient pour Post: ", post_coefficient, "\n")
 
 ```
+
+
+
+
 
 
 
@@ -126,9 +131,12 @@ MERGED
 DIFF AVEC VARIABLES DE CONTROLE
 ```{r}
 # Estimer les paramètres DiD en utilisant une régression linéaire
-diD_model <- lm(Outcome ~ Post + P_PRICE + FE_VALUATION_PE_MEAN + FREF_MARKET_VALUE_COMPANY + time + Post:time + Group - 1, data = fr_cov_noESG)
+diD_model <- lm(Outcome ~ Post +category + time + Post:time + Group - 1, data = fr_pondere_noESG)
+# Extraire uniquement le coefficient estimé pour 'Post'
+post_coefficient <- coef(diD_model)["Post"]
 
-print(summary(diD_model))
+# Afficher le coefficient pour 'Post'
+cat("Coefficient pour Post: ", post_coefficient, "\n")
 ```
 
 
