@@ -1,10 +1,8 @@
 ```{r}
-fr_pondere_ESG <- subset(fr_pondere_ESG, select = -TreatmentPeriod.y
+fr_pondere_noESG <- subset(fr_pondere_noESG, select = -TreatmentPeriod.x
                          )
 
 ```
-
-
 
 
 ````{r}
@@ -46,3 +44,75 @@ fr_pondere_ESG <- fr_pondere_ESG %>%
 fr_pondere_ESG <- fr_pondere_ESG %>%
   mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
 ```
+
+
+
+
+```{r}
+# Estimer les paramètres DiD en utilisant une régression linéaire
+diD_model <- lm(Outcome ~ Post + time + Post:time + Group - 1, data = fr_pondere_ESG)
+
+# Extraire uniquement le coefficient estimé pour 'Post'
+post_coefficient <- coef(diD_model)["Post"]
+
+# Afficher le coefficient pour 'Post'
+cat("Coefficient pour Post: ", post_coefficient, "\n")
+
+```
+
+
+
+````{r}
+# Utiliser la fonction left_join() de dplyr pour fusionner les dataframes
+fr_pondere_noESG <- fr_pondere_noESG %>%
+  group_by(id) %>%
+  arrange(id, date) %>%
+  mutate(Post = ifelse((FE_REVISION_EPS_REVDOWN > 1.5 * dplyr::lag(FE_REVISION_EPS_REVDOWN, default = first(FE_REVISION_EPS_REVDOWN)) & FE_REVISION_EPS_REVDOWN > 5 ) | (FE_REVISION_PRICE_TGT_REVDOWN > 1.5 * dplyr::lag(FE_REVISION_PRICE_TGT_REVDOWN, default = first(FE_REVISION_PRICE_TGT_REVDOWN)) & FE_REVISION_PRICE_TGT_REVDOWN > 5 ) , 1, 0))
+
+  
+
+
+# Trier la base de données par entreprise (id) et par date
+fr_pondere_noESG <- fr_pondere_noESG %>% arrange(id, date)
+
+# Regrouper les données par entreprise (id)
+fr_pondere_noESG <- fr_pondere_noESG %>%
+  group_by(id) %>%
+  # Créer une nouvelle colonne pour indiquer si l'entreprise est traitée à partir de cette date
+mutate(Post = ifelse(cummax(Post) == 1, 1, 0)) %>%
+  ungroup()  
+
+
+fr_pondere_noESG <- fr_pondere_noESG %>%
+  group_by(id) %>%
+  # Calcul de la période de traitement avec remplacement des NA par 0
+  dplyr::summarise(TreatmentPeriod = ifelse(any(Post == 1), min(time[Post == 1], na.rm = TRUE), 0)) %>%
+  # Fusion avec le dataframe original
+  dplyr::left_join(fr_pondere_noESG, by = "id")
+
+
+fr_pondere_noESG <- fr_pondere_noESG %>%
+  group_by(id) %>%
+  mutate(treated = ifelse(any(Post == 1), 1, 0)) %>%
+  ungroup()
+
+
+# Créer la colonne Group
+fr_pondere_noESG <- fr_pondere_noESG %>%
+  mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
+```
+
+
+
+```{r}
+# Estimer les paramètres DiD en utilisant une régression linéaire
+diD_model <- lm(Outcome ~ Post + time + Post:time + Group - 1, data = fr_pondere_noESG)
+
+# Extraire uniquement le coefficient estimé pour 'Post'
+post_coefficient <- coef(diD_model)["Post"]
+
+# Afficher le coefficient pour 'Post'
+cat("Coefficient pour Post: ", post_coefficient, "\n")
+
+```
+
