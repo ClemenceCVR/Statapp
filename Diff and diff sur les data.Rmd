@@ -12,7 +12,7 @@ FONDS NON ESG
 
 Covalence_final <- select(Covalence_AllData, date, ISIN, CON_fina)
 
-noESG_final  <- select(noESG_Funds_Holdings_All, fund_Isin, weight, date, isin)
+noESG_final  <- select(noESG_Funds_Holdings_All, fund_Isin, weight, date, isin, category)
 
 
 
@@ -152,7 +152,7 @@ iplot(est_did)
 ______________________________________________________________________________________________________________________
 FONDS ESG
 ```{r}
-ESG_final  <- select(ESG_Funds_Holdings_All_1_, fund_Isin, weight, date, isin)
+ESG_final  <- select(ESG_Funds_Holdings_All_1_, fund_Isin, weight, date, isin, category)
 ```
 
 ```{r}
@@ -336,7 +336,7 @@ Poids_Fonds_ESG <- ESG_Funds_Holdings_All_1_ %>%
   group_by(fund_Isin, date) %>%
   mutate(poids = market_value / weight) %>%
   slice(1) %>%  # Garder seulement la première ligne de chaque groupe
-  select(fund_Isin, date, poids) %>%
+  select(fund_Isin, date, poids, category) %>%
   distinct()  # Retirer les éventuelles lignes en double
 ```
 
@@ -366,7 +366,7 @@ weighted_sum <- aggregate(cbind(sum_product = product, sum_weight = poids) ~ dat
 weighted_average <- weighted_sum$sum_product / weighted_sum$sum_weight
 
 # Créer le nouveau dataframe 'fond_representatif_pondere'
-fr_pondere_ESG <- data.frame(date = weighted_sum$date, id = weighted_sum$id, Outcome = weighted_average)
+fr_pondere_ESG <- data.frame(date = weighted_sum$date, id = weighted_sum$id, Outcome = weighted_average, category=category$Poids_Fonds_ESG)
 ```
 
 
@@ -436,7 +436,7 @@ fr_pondere_ESG <- merge(fr_pondere_ESG, Market_ESG_cut, by.x = c("id", "date"), 
 
 ```{r}
 Poids_Fonds_noESG <- noESG_Funds_Holdings_All %>%
-  group_by(fund_Isin, date) %>%
+  group_by(fund_Isin, date, category) %>%
   mutate(poids = market_value / weight) %>%
   slice(1) %>%  # Garder seulement la première ligne de chaque groupe
   select(fund_Isin, date, poids) %>%
