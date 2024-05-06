@@ -1,0 +1,21 @@
+
+
+
+```{r}
+#-----------------------------------------------------------------------------
+# modify the dataset a bit so that we can run an event study
+#-----------------------------------------------------------------------------
+
+# generate leads and lags of the treatment
+Dtl_copie <- sapply(-(time.periods-1):(time.periods-2), function(l) {
+    dtl_copie <- 1*( (copie_dataset$period == copie_dataset$G + l) & (copie_dataset$G > 0) )
+    dtl_copie
+})
+Dtl_copie <- as.data.frame(Dtl_copie)
+cnames1 <- paste0("Dtmin", (time.periods-1):1)
+colnames(Dtl_copie) <- c(cnames1, paste0("Dt", 0:(time.periods-2)))
+copie_dataset <- cbind.data.frame(copie_dataset, Dtl_copie)
+row.names(copie_dataset) <- NULL
+
+head(copie_dataset)
+```
