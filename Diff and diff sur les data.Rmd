@@ -1,13 +1,19 @@
 ```{r}
 library(dplyr)
 library(lubridate)
+```
 
+
+______________________________________________________________________________________________________________________
+
+FONDS NON ESG
+
+```{r}
 
 Covalence_final <- select(Covalence_AllData, date, ISIN, CON_fina)
 
 noESG_final  <- select(noESG_Funds_Holdings_All, fund_Isin, weight, date, isin)
 
-library(dplyr)
 
 
 #On arrange les dates
@@ -54,6 +60,7 @@ merged_final <- merged_final %>%
 
 ```
 
+FONDS REPRESENTATIF NN ESG
 ````{r}
 # Création du fond représentatif
 fond_representatif <- aggregate(Outcome ~ time + id + date, data = merged_final, FUN = mean)
@@ -64,21 +71,12 @@ Covalence_AllData_subset$date <- as.Date(Covalence_AllData_subset$date)
 
 # Utiliser la fonction left_join() de dplyr pour fusionner les dataframes
 fond_representatif <- left_join(fond_representatif, Covalence_AllData_subset, by = c("date", "id" = "ISIN"))
-```
-
-
-
-
-```{r}
 
 fond_representatif <- fond_representatif %>%
   group_by(id) %>%
   arrange(id, date) %>%
   mutate(Post = ifelse(CON_fina > 10 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
 
-```
-
-```{r}
 # Trier la base de données par entreprise (id) et par date
 fond_representatif <- fond_representatif %>% arrange(id, date)
 
@@ -109,7 +107,7 @@ fond_representatif <- fond_representatif %>%
   mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
 ```
 
-
+ON FILTRE POUR LES 5 PREMIERES PERIODES
 ```{r}
 fond_representatif_filtré <- fond_representatif %>%
   filter((time >= TreatmentPeriod - 5 & time <= TreatmentPeriod + 5) | TreatmentPeriod == 0)
@@ -119,7 +117,7 @@ head(fond_representatif_filtré)
 
 ```
 
-
+PLOT
 ```{r}
 # Plot the simulated data
 ggplot2::ggplot(fond_representatif_filtré, ggplot2::aes(x = time, y = Outcome, color = Group, linetype = factor(Post))) +
@@ -128,6 +126,8 @@ ggplot2::ggplot(fond_representatif_filtré, ggplot2::aes(x = time, y = Outcome, 
   ggplot2::theme_minimal()
 ```
 
+
+DIFF AND DIFF
 ```{r}
 # Estimer les paramètres DiD en utilisant une régression linéaire
 diD_model <- lm(Outcome ~ Post + time + Post:time + Group - 1, data = fond_representatif_filtré)
@@ -138,11 +138,9 @@ post_coefficient <- coef(diD_model)["Post"]
 # Afficher le coefficient pour 'Post'
 cat("Coefficient pour Post: ", post_coefficient, "\n")
 
-
-
 ```
 
-
+EVENT STUDY
 ```{r}
 fond_representatif_filtré = fond_representatif_filtré %>% mutate(Time2Treatment = ifelse(treated==1, time-TreatmentPeriod, -1000))
 est_did = feols(Outcome ~ i(Time2Treatment, ref = c(-1, -1000)) | id + time + Group, fond_representatif_filtré)
@@ -151,94 +149,8 @@ iplot(est_did)
 
 ```
 
-
-
-```{r}
-# on prend le fond : US74440N1028 par exemple
-
-merged_US74 <- filter(merged_final, fund_Isin == "US74440N1028")
-
-
-merged_US74 <- merged_US74 %>%
-  group_by(id) %>%
-  arrange(id, date) %>%
-  mutate(Post = ifelse(CON_fina > 10 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
-
-
-```
-
-
-```{r}
-# Trier la base de données par entreprise (id) et par date
-merged_US74 <- merged_US74 %>% arrange(id, date)
-
-# Regrouper les données par entreprise (id)
-merged_US74 <- merged_US74 %>%
-  group_by(id) %>%
-  # Créer une nouvelle colonne pour indiquer si l'entreprise est traitée à partir de cette date
-mutate(Post = ifelse(cummax(Post) == 1, 1, 0)) %>%
-  ungroup()  
-
-
-merged_US74 <- merged_US74 %>%
-  group_by(id) %>%
-  # Calcul de la période de traitement avec remplacement des NA par 0
-  dplyr::summarise(TreatmentPeriod = ifelse(any(Post == 1), min(time[Post == 1], na.rm = TRUE), 0)) %>%
-  # Fusion avec le dataframe original
-  dplyr::left_join(merged_US74, by = "id")
-
-
-merged_US74 <- merged_US74 %>%
-  group_by(id) %>%
-  mutate(treated = ifelse(any(Post == 1), 1, 0)) %>%
-  ungroup()
-
-
-# Créer la colonne Group
-merged_US74 <- merged_US74 %>%
-  mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
-```
-
-
-```{r}
-# Plot the simulated data
-ggplot2::ggplot(merged_US74, ggplot2::aes(x = time, y = Outcome, color = Group, linetype = factor(Post))) +
-  ggplot2::geom_point() +
-  ggplot2::labs(x = "Time", y = "Outcome", color = "Group", linetype = "Post") +
-  ggplot2::theme_minimal()
-```
-
-```{r}
-# Estimer les paramètres DiD en utilisant une régression linéaire
-diD_model <- lm(Outcome ~ Post + time + Post:time + Group - 1, data = merged_US74)
-
-# Extraire uniquement le coefficient estimé pour 'Post'
-post_coefficient <- coef(diD_model)["Post"]
-
-# Afficher le coefficient pour 'Post'
-cat("Coefficient pour Post: ", post_coefficient, "\n")
-
-
-
-```
-
-```{r}
-merged_US74_filtré <- merged_US74 %>%
-  filter((time >= TreatmentPeriod - 5 & time <= TreatmentPeriod + 5) | TreatmentPeriod == 0)
-
-# Afficher les premières lignes du data.frame filtré
-head(merged_US74_filtré)
-
-```
-
-```{r}
-merged_US74_filtré = merged_US74_filtré %>% mutate(Time2Treatment = ifelse(treated==1, time-TreatmentPeriod, -1000))
-est_did = feols(Outcome ~ i(Time2Treatment, ref = c(-1, -1000)) | id + time + Group, merged_US74_filtré)
-
-iplot(est_did)
-
-```
-
+______________________________________________________________________________________________________________________
+FONDS ESG
 ```{r}
 ESG_final  <- select(ESG_Funds_Holdings_All_1_, fund_Isin, weight, date, isin)
 ```
@@ -253,10 +165,7 @@ ESG_final <- ESG_final %>%
 ESG_final$date <- as.character(ESG_final$date)
 
 ESG_final$date <- paste(substr(ESG_final$date, 1, 4), substr(ESG_final$date, 5, 6), sep="-")
-```
 
-
-```{r}
 merged_final_ESG <- merge(ESG_final, Covalence_final, by.x = c("isin", "date"), by.y = c("ISIN", "date"))
 ```
 
@@ -274,10 +183,6 @@ merged_final_ESG$nb_mois <- interval(start = reference_date, end = merged_final_
 ```{r}
 merged_final_ESG <- merged_final_ESG %>%
   rename(Outcome = delta_weight)
-```
-
-
-```{r}
 merged_final_ESG <- merged_final_ESG %>%
   rename(id = isin)
 
@@ -286,6 +191,8 @@ merged_final_ESG <- merged_final_ESG %>%
 
 ```
 
+
+#FONDS REPRESENTATIF
 ````{r}
 # Création du fond représentatif
 fond_representatif_ESG <- aggregate(Outcome ~ time + id + date, data = merged_final_ESG, FUN = mean)
@@ -296,18 +203,12 @@ Covalence_AllData_subset$date <- as.Date(Covalence_AllData_subset$date)
 
 # Utiliser la fonction left_join() de dplyr pour fusionner les dataframes
 fond_representatif_ESG <- left_join(fond_representatif_ESG, Covalence_AllData_subset, by = c("date", "id" = "ISIN"))
-```
-
-```{r}
 
 fond_representatif_ESG <- fond_representatif_ESG %>%
   group_by(id) %>%
   arrange(id, date) %>%
   mutate(Post = ifelse(CON_fina > 10 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
 
-```
-
-```{r}
 # Trier la base de données par entreprise (id) et par date
 fond_representatif_ESG <- fond_representatif_ESG %>% arrange(id, date)
 
@@ -338,7 +239,7 @@ fond_representatif_ESG <- fond_representatif_ESG %>%
   mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
 ```
 
-
+FONDS FILTRE
 ```{r}
 fond_representatif_filtré_ESG <- fond_representatif_ESG %>%
   filter((time >= TreatmentPeriod - 5 & time <= TreatmentPeriod + 5) | TreatmentPeriod == 0)
@@ -348,7 +249,7 @@ head(fond_representatif_filtré_ESG)
 
 ```
 
-
+PLOT
 ```{r}
 # Plot the simulated data
 ggplot2::ggplot(fond_representatif_filtré_ESG, ggplot2::aes(x = time, y = Outcome, color = Group, linetype = factor(Post))) +
@@ -356,7 +257,7 @@ ggplot2::ggplot(fond_representatif_filtré_ESG, ggplot2::aes(x = time, y = Outco
   ggplot2::labs(x = "Time", y = "Outcome", color = "Group", linetype = "Post") +
   ggplot2::theme_minimal()
 ```
-
+DIFF AND DIFF
 ```{r}
 # Estimer les paramètres DiD en utilisant une régression linéaire
 diD_model <- lm(Outcome ~ Post + time + Post:time + Group - 1, data = fond_representatif_filtré_ESG)
@@ -369,7 +270,7 @@ cat("Coefficient pour Post: ", post_coefficient, "\n")
 
 ```
 
-
+EVEN STUDY
 ```{r}
 fond_representatif_filtré_ESG = fond_representatif_filtré_ESG %>% mutate(Time2Treatment = ifelse(treated==1, time-TreatmentPeriod, -1000))
 est_did = feols(Outcome ~ i(Time2Treatment, ref = c(-1, -1000)) | id + time + Group, fond_representatif_filtré_ESG)
@@ -378,9 +279,15 @@ iplot(est_did)
 
 ```
 
+_____________________________________________________________________________________________________________________
+RAJOUT DE VARIABLES DE CONTROLE 
+
+MERGED
 ```{r}
 MarketData_All_Firms_in_ESG_Funds <- merge(MarketData_All_Firms_in_ESG_Funds, All_Unique_Companies, by=c("ticker"))
 ```
+
+
 ```{r}
 MarketData_All_Firms_in_noESG_Funds <- merge(MarketData_All_Firms_in_noESG_Funds, All_Unique_Companies, by=c("ticker"))
 ```
@@ -398,31 +305,32 @@ MarketData_All_Firms_in_noESG_Funds$date <- format(MarketData_All_Firms_in_noESG
 ```
 
 ```{r}
-Market_ESG_cut  <- select(MarketData_All_Firms_in_ESG_Funds, date, isin, FE_VALUATION_PE_MEAN, P_PRICE, FREF_MARKET_VALUE_COMPANY)
+Market_ESG_cut  <- select(MarketData_All_Firms_in_ESG_Funds, date, isin, FE_VALUATION_PE_MEAN, P_PRICE, FREF_MARKET_VALUE_COMPANY, FE_REVISION_EPS_REVDOWN, FE_REVISION_PRICE_TGT_REVDOWN)
 ```
+
 ```{r}
-Market_noESG_cut  <- select(MarketData_All_Firms_in_noESG_Funds, date, isin, FE_VALUATION_PE_MEAN, P_PRICE, FREF_MARKET_VALUE_COMPANY )
+Market_noESG_cut  <- select(MarketData_All_Firms_in_noESG_Funds, date, isin, FE_VALUATION_PE_MEAN, P_PRICE, FREF_MARKET_VALUE_COMPANY, FE_REVISION_EPS_REVDOWN, FE_REVISION_PRICE_TGT_REVDOWN )
 ```
 
 ```{r}
 fr_cov_ESG <- merge(fond_representatif_filtré_ESG, Market_ESG_cut, by.x = c("id", "date"), by.y = c("isin", "date"))
 ```
+
 ```{r}
 fr_cov_noESG <- merge(fond_representatif_filtré, Market_noESG_cut, by.x = c("id", "date"), by.y = c("isin", "date"))
 ```
 
+
+DIFF AVEC VARIABLES DE CONTROLE
 ```{r}
 # Estimer les paramètres DiD en utilisant une régression linéaire
 diD_model <- lm(Outcome ~ Post + P_PRICE + FE_VALUATION_PE_MEAN + FREF_MARKET_VALUE_COMPANY + time + Post:time + Group - 1, data = fr_cov_noESG)
 
-# Extraire uniquement le coefficient estimé pour 'Post'
-post_coefficient <- coef(diD_model)["Post"]
-
-# Afficher le coefficient pour 'Post'
-cat("Coefficient pour Post: ", post_coefficient, "\n")
+print(summary(diD_model))
 ```
 
-
+FONDS PONDERE
+_____________________________________________________________________________________________________________________
 ```{r}
 Poids_Fonds_ESG <- ESG_Funds_Holdings_All_1_ %>%
   group_by(fund_Isin, date) %>%
@@ -431,6 +339,7 @@ Poids_Fonds_ESG <- ESG_Funds_Holdings_All_1_ %>%
   select(fund_Isin, date, poids) %>%
   distinct()  # Retirer les éventuelles lignes en double
 ```
+
 ```{r}
 Poids_Fonds_ESG$date <- as.character(Poids_Fonds_ESG$date)
 
@@ -459,6 +368,8 @@ weighted_average <- weighted_sum$sum_product / weighted_sum$sum_weight
 # Créer le nouveau dataframe 'fond_representatif_pondere'
 fr_pondere_ESG <- data.frame(date = weighted_sum$date, id = weighted_sum$id, Outcome = weighted_average)
 ```
+
+
 ```{r}
 # Définir la date de référence une seule fois
 reference_date <- ymd("2013-01-01")
@@ -467,6 +378,60 @@ reference_date <- ymd("2013-01-01")
 fr_pondere_ESG$time <- interval(start = reference_date, end = fr_pondere_ESG$date) / months(1)
 ```
 
+
+```{r}
+# Utiliser la fonction left_join() de dplyr pour fusionner les dataframes
+fr_pondere_ESG <- left_join(fr_pondere_ESG, Covalence_AllData_subset, by = c("date", "id" = "ISIN"))
+
+fr_pondere_ESG <- fr_pondere_ESG %>%
+  group_by(id) %>%
+  arrange(id, date) %>%
+  mutate(Post = ifelse(CON_fina > 10 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
+
+# Trier la base de données par entreprise (id) et par date
+fr_pondere_ESG <- fr_pondere_ESG %>% arrange(id, date)
+
+# Regrouper les données par entreprise (id)
+fr_pondere_ESG <- fr_pondere_ESG %>%
+  group_by(id) %>%
+  # Créer une nouvelle colonne pour indiquer si l'entreprise est traitée à partir de cette date
+mutate(Post = ifelse(cummax(Post) == 1, 1, 0)) %>%
+  ungroup()  
+
+
+fr_pondere_ESG <- fr_pondere_ESG %>%
+  group_by(id) %>%
+  # Calcul de la période de traitement avec remplacement des NA par 0
+  dplyr::summarise(TreatmentPeriod = ifelse(any(Post == 1), min(time[Post == 1], na.rm = TRUE), 0)) %>%
+  # Fusion avec le dataframe original
+  dplyr::left_join(fr_pondere_ESG, by = "id")
+
+
+fr_pondere_ESG <- fr_pondere_ESG %>%
+  group_by(id) %>%
+  mutate(treated = ifelse(any(Post == 1), 1, 0)) %>%
+  ungroup()
+
+
+# Créer la colonne Group
+fr_pondere_ESG <- fr_pondere_ESG %>%
+  mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
+```
+
+FONDS FILTRE
+```{r}
+fr_pondere_ESG <- fr_pondere_ESG %>%
+  filter((time >= TreatmentPeriod - 5 & time <= TreatmentPeriod + 5) | TreatmentPeriod == 0)
+
+# Afficher les premières lignes du data.frame filtré
+head(fr_pondere_ESG)
+
+```
+
+
+```{r}
+fr_pondere_ESG <- merge(fr_pondere_ESG, Market_ESG_cut, by.x = c("id", "date"), by.y = c("isin", "date"))
+```
 
 
 ```{r}
@@ -502,15 +467,68 @@ weighted_average <- weighted_sum$sum_product / weighted_sum$sum_weight
 
 # Créer le nouveau dataframe 'fond_representatif_pondere'
 fr_pondere_noESG <- data.frame(date = weighted_sum$date, id = weighted_sum$id, Outcome = weighted_average)
+
 ```
+
+
 ```{r}
 fr_pondere_noESG$time <- interval(start = reference_date, end = fr_pondere_noESG$date) / months(1)
 ```
 
+XXXXXXXXXXX
+```{r}
+# Utiliser la fonction left_join() de dplyr pour fusionner les dataframes
+fr_pondere_noESG <- left_join(fr_pondere_noESG, Covalence_AllData_subset, by = c("date", "id" = "ISIN"))
+
+fr_pondere_noESG <- fr_pondere_noESG %>%
+  group_by(id) %>%
+  arrange(id, date) %>%
+  mutate(Post = ifelse(CON_fina > 10 * dplyr::lag(CON_fina, default = first(CON_fina)), 1, 0))
+
+# Trier la base de données par entreprise (id) et par date
+fr_pondere_noESG <- fr_pondere_noESG %>% arrange(id, date)
+
+# Regrouper les données par entreprise (id)
+fr_pondere_noESG <- fr_pondere_noESG %>%
+  group_by(id) %>%
+  # Créer une nouvelle colonne pour indiquer si l'entreprise est traitée à partir de cette date
+mutate(Post = ifelse(cummax(Post) == 1, 1, 0)) %>%
+  ungroup()  
 
 
+fr_pondere_noESG <- fr_pondere_noESG %>%
+  group_by(id) %>%
+  # Calcul de la période de traitement avec remplacement des NA par 0
+  dplyr::summarise(TreatmentPeriod = ifelse(any(Post == 1), min(time[Post == 1], na.rm = TRUE), 0)) %>%
+  # Fusion avec le dataframe original
+  dplyr::left_join(fr_pondere_noESG, by = "id")
 
 
+fr_pondere_noESG <- fr_pondere_noESG %>%
+  group_by(id) %>%
+  mutate(treated = ifelse(any(Post == 1), 1, 0)) %>%
+  ungroup()
+
+
+# Créer la colonne Group
+fr_pondere_noESG <- fr_pondere_noESG %>%
+  mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
+```
+
+FONDS FILTRE
+```{r}
+fr_pondere_noESG <- fr_pondere_noESG %>%
+  filter((time >= TreatmentPeriod - 5 & time <= TreatmentPeriod + 5) | TreatmentPeriod == 0)
+
+# Afficher les premières lignes du data.frame filtré
+head(fr_pondere_noESG)
+
+```
+
+
+```{r}
+fr_pondere_noESG <- merge(fr_pondere_noESG, Market_noESG_cut, by.x = c("id", "date"), by.y = c("isin", "date"))
+```
 
 
 
