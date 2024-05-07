@@ -376,7 +376,7 @@ weighted_sum <- aggregate(cbind(sum_product = product, sum_weight = poids) ~ dat
 weighted_average <- weighted_sum$sum_product / weighted_sum$sum_weight
 
 weighted_sum <- weighted_sum %>%
-  left_join(select(merged_final, isin, Headquarters_Regions), by = "isin")
+  left_join(select(merged_final, id, Headquarters_Region), by = "id")
 
 # Créer le nouveau dataframe 'fond_representatif_pondere'
 fr_pondere_ESG <- data.frame(
@@ -384,7 +384,7 @@ fr_pondere_ESG <- data.frame(
   id = weighted_sum$id, 
   category = weighted_sum$category.y,  # Assurez-vous d'ajouter la colonne category ici
   Outcome = weighted_average,
-  Headquarters_Regions =merged_final_ESG$Headquarters_Regions)
+  Headquarters_Regions =weighted_sum$Headquarters_Regions)
 ```
 
 
