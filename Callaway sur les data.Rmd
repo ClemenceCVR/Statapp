@@ -1,4 +1,63 @@
+```{r}
+library(dplyr)
+```
 
+```{r}
+install.packages("devtools")
+devtools::install_github("bcallaway11/did", force=TRUE)
+library(did)
+library(plm)
+library(ggplot2)
+```
+
+
+```{r}
+fr_pondere_ESG_copie <- data.frame(fr_pondere_ESG)
+```
+
+```{r}
+
+# Renommer 'col1' en 'nouveau_nom'
+fr_pondere_ESG_copie <- fr_pondere_ESG_copie %>%
+  rename(G = TreatmentPeriod)
+
+fr_pondere_ESG_copie <- fr_pondere_ESG_copie %>%
+  rename(Y = Outcome)
+
+fr_pondere_ESG_copie <- fr_pondere_ESG_copie %>%
+  rename(periods = time)
+
+fr_pondere_ESG_copie <- fr_pondere_ESG_copie %>%
+  mutate(X = 0)
+
+fr_pondere_ESG_copie <- fr_pondere_ESG_copie %>%
+  mutate(cluster = 0)
+
+```
+
+```{r}
+fr_pondere_noESG_copie <- data.frame(fr_pondere_noESG)
+```
+
+```{r}
+
+# Renommer 'col1' en 'nouveau_nom'
+fr_pondere_noESG_copie <- fr_pondere_noESG_copie %>%
+  rename(G = TreatmentPeriod)
+
+fr_pondere_noESG_copie <- fr_pondere_noESG_copie %>%
+  rename(Y = Outcome)
+
+fr_pondere_noESG_copie <- fr_pondere_noESG_copie %>%
+  rename(periods = time)
+
+fr_pondere_noESG_copie <- fr_pondere_noESG_copie %>%
+  mutate(X = 0)
+
+fr_pondere_noESG_copie <- fr_pondere_noESG_copie %>%
+  mutate(cluster = 0)
+
+```
 
 
 ```{r}
@@ -7,15 +66,32 @@
 #-----------------------------------------------------------------------------
 
 # generate leads and lags of the treatment
-Dtl_copie <- sapply(-(time.periods-1):(time.periods-2), function(l) {
-    dtl_copie <- 1*( (copie_dataset$period == copie_dataset$G + l) & (copie_dataset$G > 0) )
-    dtl_copie
+Dtl_ESG <- sapply(-(time.periods-1):(time.periods-2), function(l) {
+    dtl_ESG <- 1*( (fr_pondere_ESG_copie$period == fr_pondere_ESG_copie$G + l) & (fr_pondere_ESG_copie$G > 0) )
+    dtl_ESG
 })
-Dtl_copie <- as.data.frame(Dtl_copie)
+Dtl_ESG <- as.data.frame(Dtl_ESG)
 cnames1 <- paste0("Dtmin", (time.periods-1):1)
-colnames(Dtl_copie) <- c(cnames1, paste0("Dt", 0:(time.periods-2)))
-copie_dataset <- cbind.data.frame(copie_dataset, Dtl_copie)
-row.names(copie_dataset) <- NULL
+colnames(Dtl_ESG) <- c(cnames1, paste0("Dt", 0:(time.periods-2)))
+copie_dataset <- cbind.data.frame(fr_pondere_ESG_copie, Dtl_ESG)
+row.names(fr_pondere_ESG_copie) <- NULL
 
-head(copie_dataset)
+head(fr_pondere_ESG_copie)
+```
+
+```{r}
+# estimate group-group time average treatment effects
+did.att.gt <- att_gt(yname = "Y",
+                     tname = "periods",
+                     idnam = "id",
+                     gname = "G",
+                     data = fr_pondere_ESG_copie
+                     )
+# summary(did.att.gt)
+
+# aggregate them into event study plot
+did.es <- aggte(did.att.gt, type = "dynamic")
+
+# plot the event study
+ggdid(did.es)
 ```
