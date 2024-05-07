@@ -4,13 +4,22 @@ library(lubridate)
 ```
 
 
+```{r}
+
+Covalence_AllData <- Covalence_AllData %>%
+  rename(Headquarters_Region = 'Headquarters Region')
+
+```
+
+
 ______________________________________________________________________________________________________________________
 
 FONDS NON ESG
 
+
 ```{r}
 
-Covalence_final <- select(Covalence_AllData, date, ISIN, CON_fina)
+Covalence_final <- select(Covalence_AllData, Headquarters_Region, date, ISIN, CON_fina)
 
 noESG_final  <- select(noESG_Funds_Holdings_All, fund_Isin, weight, date, isin, category)
 
@@ -153,6 +162,7 @@ ________________________________________________________________________________
 FONDS ESG
 ```{r}
 ESG_final  <- select(ESG_Funds_Holdings_All_1_, fund_Isin, weight, date, isin, category)
+
 ```
 
 ```{r}
@@ -365,12 +375,16 @@ weighted_sum <- aggregate(cbind(sum_product = product, sum_weight = poids) ~ dat
 # Calculer la moyenne pondérée
 weighted_average <- weighted_sum$sum_product / weighted_sum$sum_weight
 
+weighted_sum <- weighted_sum %>%
+  left_join(select(merged_final, isin, Headquarters_Regions), by = "isin")
+
 # Créer le nouveau dataframe 'fond_representatif_pondere'
 fr_pondere_ESG <- data.frame(
   date = weighted_sum$date, 
   id = weighted_sum$id, 
   category = weighted_sum$category.y,  # Assurez-vous d'ajouter la colonne category ici
-  Outcome = weighted_average)
+  Outcome = weighted_average,
+  Headquarters_Regions =merged_final_ESG$Headquarters_Regions)
 ```
 
 
