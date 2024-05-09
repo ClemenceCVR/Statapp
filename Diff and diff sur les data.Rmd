@@ -129,7 +129,7 @@ noESG_final$date <- as.Date(paste(format(noESG_final$date, "%Y-%m"), "01", sep =
 
 ```{r}
 noESG_final <- noESG_final %>%
-  rename(id = isin)
+rename(id = isin)
 
 # Ajout des poids moyens dans le fond représentatif
 merged_data <- merge(fond_representatif, noESG_final, by = c("id", "date"), all.x = TRUE)
@@ -277,6 +277,21 @@ fond_representatif_ESG <- fond_representatif_ESG %>%
 fond_representatif_ESG <- fond_representatif_ESG %>%
   mutate(Group = paste("Group", TreatmentPeriod, sep = " "))
 ```
+
+```{r}
+# Ajout des poids moyens dans le fond représentatif
+merged_data <- merge(fond_representatif_ESG, merged_final_ESG, by = c("id", "date"), all.x = TRUE)
+
+# Calculer la moyenne des valeurs de weight pour chaque groupe d'ID et de date
+merged_data <- aggregate(weight ~ id + date, data = merged_data, FUN = mean, na.rm = TRUE)
+
+# Renommer la colonne weight calculée
+names(merged_data)[3] <- "average_weight"
+
+# Joindre les données fusionnées à fond_representatif
+fond_representatif_ESG <- merge(fond_representatif_ESG, merged_data, by = c("id", "date"), all.x = TRUE)
+```
+
 
 FONDS FILTRE
 ```{r}
