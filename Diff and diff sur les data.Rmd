@@ -414,21 +414,30 @@ merged_with_weights <- merge(merged_final_ESG, Poids_Fonds_ESG, by = c("date", "
 # Calculer les produits entre Outcome et poids
 merged_with_weights$product <- merged_with_weights$Outcome * merged_with_weights$poids
 
-weighted_sum <- aggregate(cbind(sum_product = product, sum_weight = poids) ~ date + id + category.y, data = merged_with_weights, FUN = sum)
 
-# Calculer la moyenne pondérée
+merged_with_weights$prod <- merged_with_weights$weight * merged_with_weights$poids
+```
+```{r}
+weighted_sum <- aggregate(cbind(sum_product = product, sum_weight = poids, sum_prod = prod) ~ date + id, data = merged_with_weights, FUN = sum)
+```
+```{r}
 weighted_average <- weighted_sum$sum_product / weighted_sum$sum_weight
 
-weighted_sum <- weighted_sum %>%
-  left_join(select(merged_final, id, Headquarters_Region), by = "id")
 
-# Créer le nouveau dataframe 'fond_representatif_pondere'
+weighted_average2 <- weighted_sum$sum_prod / weighted_sum$sum_weight
+
+weighted_sum <- weighted_sum %>%
+  left_join(select(merged_final, id, date, Headquarters_Region), by = c("id","date"))
+
+weighted_sum <- unique(weighted_sum)
+
 fr_pondere_ESG <- data.frame(
   date = weighted_sum$date, 
   id = weighted_sum$id, 
-  category = weighted_sum$category.y,  # Assurez-vous d'ajouter la colonne category ici
+  #category = weighted_sum$category,  # Assurez-vous d'ajouter la colonne category ici
   Outcome = weighted_average,
-  Headquarters_Regions =weighted_sum$Headquarters_Regions)
+  Weight = weighted_average2,
+  Headquarters_Regions =weighted_sum$Headquarters_Region)
 ```
 
 
